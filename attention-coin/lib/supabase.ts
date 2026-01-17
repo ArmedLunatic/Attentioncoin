@@ -43,6 +43,7 @@ export async function upsertUser(walletAddress: string, data: Partial<Database['
   const { data: user, error } = await supabase
     .from('users')
     .upsert(
+      // @ts-expect-error - Supabase type inference issue with upsert
       { wallet_address: walletAddress, ...data },
       { onConflict: 'wallet_address' }
     )

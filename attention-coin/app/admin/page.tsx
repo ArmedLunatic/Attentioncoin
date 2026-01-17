@@ -87,6 +87,7 @@ export default function AdminPage() {
     try {
       const { error } = await supabase
         .from('submissions')
+        // @ts-expect-error - Supabase type inference issue with update
         .update({
           status: 'approved',
           engagement_likes: engagementData.likes,
@@ -110,6 +111,7 @@ export default function AdminPage() {
     try {
       const { error } = await supabase
         .from('submissions')
+        // @ts-expect-error - Supabase type inference issue with update
         .update({ status: 'rejected' })
         .eq('id', submissionId);
 
@@ -127,6 +129,7 @@ export default function AdminPage() {
     try {
       const { error } = await supabase
         .from('submissions')
+        // @ts-expect-error - Supabase type inference issue with update
         .update({ paid: true })
         .eq('id', submissionId);
 
