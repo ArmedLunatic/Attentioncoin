@@ -3,16 +3,13 @@ const nextConfig = {
   images: {
     domains: ['pbs.twimg.com', 'abs.twimg.com'],
   },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-        'pino-pretty': false,
-      }
+  transpilePackages: ['@solana/wallet-adapter-base', '@solana/wallet-adapter-react'],
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      'pino-pretty': false,
     }
+    config.externals.push('pino-pretty')
     return config
   },
 }
