@@ -4,12 +4,14 @@ const nextConfig = {
     domains: ['pbs.twimg.com', 'abs.twimg.com'],
   },
   transpilePackages: ['@solana/wallet-adapter-base', '@solana/wallet-adapter-react'],
-  webpack: (config) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      'pino-pretty': false,
+  webpack: (config, { isServer }) => {
+    // Only exclude pino-pretty from client-side bundle
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        'pino-pretty': false,
+      }
     }
-    config.externals.push('pino-pretty')
     return config
   },
 }
