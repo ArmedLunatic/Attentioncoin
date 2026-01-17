@@ -60,9 +60,9 @@ export default function AdminPage() {
       // Calculate stats
       const totalUsers = usersData?.length || 0;
       const totalSubmissions = submissionsData?.length || 0;
-      const totalApproved = submissionsData?.filter(s => s.status === 'approved').length || 0;
-      const pendingApproval = submissionsData?.filter(s => s.status === 'pending').length || 0;
-      const pendingPayment = submissionsData?.filter(s => s.status === 'approved' && !s.paid).length || 0;
+      const totalApproved = submissionsData?.filter((s: any) => s.status === 'approved').length || 0;
+      const pendingApproval = submissionsData?.filter((s: any) => s.status === 'pending').length || 0;
+      const pendingPayment = submissionsData?.filter((s: any) => s.status === 'approved' && !s.paid).length || 0;
 
       const totalPaid = usersData?.reduce((sum, u) => sum + (u.total_earned_lamports || 0), 0) || 0;
 
@@ -331,7 +331,7 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-4">
                 {submissions
-                  .filter((s) => s.status === 'pending')
+                  .filter((s: any) => s.status === 'pending')
                   .map((submission) => (
                     <div
                       key={submission.id}
@@ -361,7 +361,7 @@ export default function AdminPage() {
             <h3 className="text-xl font-semibold text-white mb-6">Pending Payments</h3>
             <div className="space-y-4">
               {submissions
-                .filter((s) => s.status === 'approved' && !s.paid)
+                .filter((s: any) => s.status === 'approved' && !s.paid)
                 .map((submission) => (
                   <div
                     key={submission.id}
