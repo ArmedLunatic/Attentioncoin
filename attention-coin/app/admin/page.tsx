@@ -55,7 +55,7 @@ export default function AdminPage() {
       // Get users
       const { data: usersData } = await supabase
         .from('users')
-        .select('*');
+        .select('*') as { data: User[] | null };
 
       // Calculate stats
       const totalUsers = usersData?.length || 0;
@@ -64,7 +64,7 @@ export default function AdminPage() {
       const pendingApproval = submissionsData?.filter(s => s.status === 'pending').length || 0;
       const pendingPayment = submissionsData?.filter(s => s.status === 'approved' && !s.paid).length || 0;
 
-      const totalPaid = (usersData as User[])?.reduce((sum, u) => sum + (u.total_earned_lamports || 0), 0) || 0;
+      const totalPaid = usersData?.reduce((sum, u) => sum + (u.total_earned_lamports || 0), 0) || 0;
 
       setStats({
         totalUsers,
