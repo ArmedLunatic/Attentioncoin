@@ -72,15 +72,19 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
 
     setLoading(true);
     try {
+      const walletAddress = publicKey.toBase58();
+      console.log('Generating code for wallet:', walletAddress);
+
       const response = await fetch('/api/verify-x', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          wallet: publicKey.toBase58(),
+          wallet: walletAddress,
         }),
       });
 
       const result = await response.json();
+      console.log('Generate code response:', result);
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to generate code');
@@ -91,7 +95,7 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
       toast.success('Verification code generated!');
     } catch (error) {
       console.error('Generate code error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to generate code');
+      toast.error(error instanceof Error ? error.message : 'Failed to generate code. Check console for details.');
     } finally {
       setLoading(false);
     }
@@ -111,29 +115,31 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
     setLoading(true);
     try {
       const cleanUsername = username.replace('@', '').trim();
+      const walletAddress = publicKey.toBase58();
+      console.log('Verifying account:', { wallet: walletAddress, username: cleanUsername });
 
       const response = await fetch('/api/verify-x', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          wallet: publicKey.toBase58(),
+          wallet: walletAddress,
           username: cleanUsername,
         }),
       });
 
       const result = await response.json();
+      console.log('Verify response:', result);
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to verify account');
       }
 
       toast.success('X account linked successfully!');
-      await refreshUser();
-      onLinked();
+      // Force page reload to ensure fresh state
+      window.location.reload();
     } catch (error) {
       console.error('Verification error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to verify. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
