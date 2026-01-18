@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
-import bs58 from 'bs58';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -51,16 +50,14 @@ import type { Submission, UserStats } from '@/types';
 
 // X Account Linking Component
 function XAccountLinking({ onLinked }: { onLinked: () => void }) {
-  const { publicKey, signMessage } = useWallet();
+  const { publicKey } = useWallet();
   const { user, refreshUser } = useUser();
   const [step, setStep] = useState<'start' | 'verify'>('start');
   const [verificationCode, setVerificationCode] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
-  const [codeExpiry, setCodeExpiry] = useState<string | null>(null);
 
-  // FIX: If user is null, try to create/refresh the user record first.
-  // This happens when the wallet is connected but DB record wasn't created yet.
+  // If user is null, try to create/refresh the user record first.
   useEffect(() => {
     if (!user) {
       refreshUser();
@@ -68,26 +65,18 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
   }, [user, refreshUser]);
 
   const generateCode = async () => {
-    if (!publicKey || !signMessage) {
+    if (!publicKey) {
       toast.error('Please connect your wallet first');
       return;
     }
 
     setLoading(true);
     try {
-      const timestamp = Date.now();
-      const message = `verify-x:generate:${timestamp}`;
-      const messageBytes = new TextEncoder().encode(message);
-      const signatureBytes = await signMessage(messageBytes);
-      const signature = bs58.encode(signatureBytes);
-
       const response = await fetch('/api/verify-x', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           wallet: publicKey.toBase58(),
-          signature,
-          timestamp,
         }),
       });
 
@@ -98,7 +87,6 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
       }
 
       setVerificationCode(result.data.code);
-      setCodeExpiry(result.data.expiresAt);
       setStep('verify');
       toast.success('Verification code generated!');
     } catch (error) {
@@ -115,7 +103,7 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
       return;
     }
 
-    if (!publicKey || !signMessage) {
+    if (!publicKey) {
       toast.error('Please connect your wallet first');
       return;
     }
@@ -123,19 +111,12 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
     setLoading(true);
     try {
       const cleanUsername = username.replace('@', '').trim();
-      const timestamp = Date.now();
-      const message = `verify-x:confirm:${cleanUsername}:${timestamp}`;
-      const messageBytes = new TextEncoder().encode(message);
-      const signatureBytes = await signMessage(messageBytes);
-      const signature = bs58.encode(signatureBytes);
 
       const response = await fetch('/api/verify-x', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           wallet: publicKey.toBase58(),
-          signature,
-          timestamp,
           username: cleanUsername,
         }),
       });

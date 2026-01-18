@@ -1,20 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { generateVerificationCode } from '@/lib/utils';
-import nacl from 'tweetnacl';
-import bs58 from 'bs58';
-
-// Verify wallet signature
-function verifySignature(message: string, signature: string, publicKey: string): boolean {
-  try {
-    const messageBytes = new TextEncoder().encode(message);
-    const signatureBytes = bs58.decode(signature);
-    const publicKeyBytes = bs58.decode(publicKey);
-    return nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
-  } catch {
-    return false;
-  }
-}
 
 /**
  * POST /api/verify-x - Generate verification code
@@ -23,31 +9,13 @@ function verifySignature(message: string, signature: string, publicKey: string):
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { wallet, signature, timestamp } = body;
+    const { wallet } = body;
 
     // Validate required fields
-    if (!wallet || !signature || !timestamp) {
+    if (!wallet) {
       return NextResponse.json(
-        { error: 'Missing required fields: wallet, signature, timestamp' },
+        { error: 'Missing wallet address' },
         { status: 400 }
-      );
-    }
-
-    // Verify timestamp is within 5 minutes
-    const now = Date.now();
-    if (Math.abs(now - timestamp) > 5 * 60 * 1000) {
-      return NextResponse.json(
-        { error: 'Request expired. Please try again.' },
-        { status: 400 }
-      );
-    }
-
-    // Verify signature
-    const message = `verify-x:generate:${timestamp}`;
-    if (!verifySignature(message, signature, wallet)) {
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 401 }
       );
     }
 
@@ -136,12 +104,12 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { wallet, signature, timestamp, username } = body;
+    const { wallet, username } = body;
 
     // Validate required fields
-    if (!wallet || !signature || !timestamp || !username) {
+    if (!wallet || !username) {
       return NextResponse.json(
-        { error: 'Missing required fields: wallet, signature, timestamp, username' },
+        { error: 'Missing required fields: wallet, username' },
         { status: 400 }
       );
     }
@@ -152,24 +120,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid username format' },
         { status: 400 }
-      );
-    }
-
-    // Verify timestamp is within 5 minutes
-    const now = Date.now();
-    if (Math.abs(now - timestamp) > 5 * 60 * 1000) {
-      return NextResponse.json(
-        { error: 'Request expired. Please try again.' },
-        { status: 400 }
-      );
-    }
-
-    // Verify signature
-    const message = `verify-x:confirm:${cleanUsername}:${timestamp}`;
-    if (!verifySignature(message, signature, wallet)) {
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 401 }
       );
     }
 
