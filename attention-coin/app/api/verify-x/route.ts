@@ -7,9 +7,12 @@ import { generateVerificationCode } from '@/lib/utils';
  * Stores the code in the database with expiration
  */
 export async function POST(request: NextRequest) {
+  console.log('[verify-x] POST request received');
+
   try {
     const body = await request.json();
     const { wallet } = body;
+    console.log('[verify-x] Wallet:', wallet);
 
     // Validate required fields
     if (!wallet) {
@@ -28,8 +31,11 @@ export async function POST(request: NextRequest) {
       .eq('wallet_address', wallet)
       .single();
 
+    console.log('[verify-x] User lookup result:', { user, error: userError?.message });
+
     if (userError && userError.code === 'PGRST116') {
       // User doesn't exist, create one
+      console.log('[verify-x] Creating new user...');
       const { data: newUser, error: createError } = await supabase
         .from('users')
         .insert({ wallet_address: wallet })
@@ -37,17 +43,18 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (createError) {
-        console.error('Error creating user:', createError);
+        console.error('[verify-x] Error creating user:', createError);
         return NextResponse.json(
-          { error: 'Failed to create user' },
+          { error: `Failed to create user: ${createError.message}` },
           { status: 500 }
         );
       }
+      console.log('[verify-x] User created:', newUser);
       user = newUser;
     } else if (userError) {
-      console.error('Error fetching user:', userError);
+      console.error('[verify-x] Error fetching user:', userError);
       return NextResponse.json(
-        { error: 'Failed to fetch user' },
+        { error: `Failed to fetch user: ${userError.message}` },
         { status: 500 }
       );
     }
@@ -63,6 +70,7 @@ export async function POST(request: NextRequest) {
     // Generate verification code
     const code = generateVerificationCode();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    console.log('[verify-x] Generated code:', code);
 
     // Store code in database
     const { error: updateError } = await supabase
@@ -74,13 +82,14 @@ export async function POST(request: NextRequest) {
       .eq('id', user?.id);
 
     if (updateError) {
-      console.error('Error storing verification code:', updateError);
+      console.error('[verify-x] Error storing verification code:', updateError);
       return NextResponse.json(
-        { error: 'Failed to generate verification code' },
+        { error: `Failed to store verification code: ${updateError.message}` },
         { status: 500 }
       );
     }
 
+    console.log('[verify-x] Code stored successfully');
     return NextResponse.json({
       success: true,
       data: {
@@ -89,9 +98,9 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Verify-x generate error:', error);
+    console.error('[verify-x] Generate error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     );
   }
