@@ -5,6 +5,7 @@ import Header from '@/components/Header';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://attention-coin.vercel.app'),
   title: 'ATTENTION COIN | Earn SOL for Driving Attention',
   description: 'Get rewarded for creating quality content. Post about $ATTENTION on X and earn SOL based on real engagement.',
   keywords: ['solana', 'memecoin', 'attention', 'earn crypto', 'twitter rewards'],
