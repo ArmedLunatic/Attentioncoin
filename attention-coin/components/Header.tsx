@@ -20,6 +20,7 @@ export default function Header() {
   const navItems = [
     { href: '/', label: 'Home' },
     { href: '/dashboard', label: 'Dashboard', requiresAuth: true },
+    { href: '/payouts', label: 'Payouts', requiresAuth: true },
     { href: '/leaderboard', label: 'Leaderboard' },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin', requiresAuth: true }] : []),
   ];

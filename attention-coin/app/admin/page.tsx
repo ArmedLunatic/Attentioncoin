@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { supabase } from '@/lib/supabase';
-import { User } from '@/types';
-import { Copy, CheckCircle, AlertCircle } from 'lucide-react';
+import { Copy, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import bs58 from 'bs58';
 
 export default function AdminPage() {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalSubmissions: 0,
@@ -19,14 +18,74 @@ export default function AdminPage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [tab, setTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [engagementData, setEngagementData] = useState({
     likes: 0,
     reposts: 0,
     replies: 0,
   });
+  const [error, setError] = useState<string | null>(null);
 
   const ADMIN_WALLET = process.env.NEXT_PUBLIC_ADMIN_WALLET;
+
+  const callAdminApi = useCallback(async (action: string, data: Record<string, any> = {}) => {
+    if (!publicKey || !signMessage) {
+      throw new Error('Wallet not connected');
+    }
+
+    const timestamp = Date.now();
+    const message = `admin:${action}:${timestamp}`;
+
+    // Sign the message with wallet
+    const encodedMessage = new TextEncoder().encode(message);
+    const signatureBytes = await signMessage(encodedMessage);
+    const signature = bs58.encode(signatureBytes);
+
+    const response = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wallet: publicKey.toBase58(),
+        signature,
+        timestamp,
+        action,
+        ...data,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'API request failed');
+    }
+
+    return result;
+  }, [publicKey, signMessage]);
+
+  const loadData = useCallback(async () => {
+    if (!publicKey || publicKey.toBase58() !== ADMIN_WALLET) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result = await callAdminApi('getStats');
+
+      if (result.success) {
+        setStats(result.data.stats);
+        setSubmissions(result.data.submissions);
+      }
+    } catch (err: any) {
+      console.error('Error loading data:', err);
+      setError(err.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, [publicKey, ADMIN_WALLET, callAdminApi]);
 
   useEffect(() => {
     if (!publicKey) {
@@ -34,107 +93,65 @@ export default function AdminPage() {
       return;
     }
 
-    if (publicKey.toString() !== ADMIN_WALLET) {
+    if (publicKey.toBase58() !== ADMIN_WALLET) {
       setLoading(false);
       return;
     }
 
     loadData();
-  }, [publicKey]);
-
-  async function loadData() {
-    try {
-      setLoading(true);
-
-      // Get submissions with user data
-      const { data: submissionsData } = await supabase
-        .from('submissions')
-        .select('*, user_id, users(username, wallet_address, total_earned_lamports)')
-        .order('created_at', { ascending: false });
-
-      // Get users
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('*');
-
-      // Calculate stats
-      const totalUsers = usersData?.length || 0;
-      const totalSubmissions = submissionsData?.length || 0;
-      const totalApproved = submissionsData?.filter(s => s.status === 'approved').length || 0;
-      const pendingApproval = submissionsData?.filter(s => s.status === 'pending').length || 0;
-      const pendingPayment = submissionsData?.filter(s => s.status === 'approved' && !s.paid).length || 0;
-
-      const totalPaid = (usersData as User[])?.reduce((sum, u) => sum + (u.total_earned_lamports || 0), 0) || 0;
-
-      setStats({
-        totalUsers,
-        totalSubmissions,
-        totalApproved,
-        totalPaid,
-        pendingApproval,
-        pendingPayment,
-      });
-
-      setSubmissions(submissionsData || []);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [publicKey, ADMIN_WALLET, loadData]);
 
   async function approveSubmission(submissionId: string) {
     try {
-      const { error } = await supabase
-        .from('submissions')
-        .update({
-          status: 'approved',
-          engagement_likes: engagementData.likes,
-          engagement_reposts: engagementData.reposts,
-          engagement_replies: engagementData.replies,
-        })
-        .eq('id', submissionId);
+      setActionLoading(submissionId);
+      setError(null);
 
-      if (error) throw error;
+      await callAdminApi('approve', {
+        submissionId,
+        engagementData,
+      });
 
       setSelectedSubmission(null);
       setEngagementData({ likes: 0, reposts: 0, replies: 0 });
-      loadData();
-    } catch (error) {
-      console.error('Error approving submission:', error);
-      alert('Failed to approve submission');
+      await loadData();
+    } catch (err: any) {
+      console.error('Error approving submission:', err);
+      setError(err.message || 'Failed to approve submission');
+    } finally {
+      setActionLoading(null);
     }
   }
 
   async function rejectSubmission(submissionId: string) {
     try {
-      const { error } = await supabase
-        .from('submissions')
-        .update({ status: 'rejected' })
-        .eq('id', submissionId);
+      setActionLoading(submissionId);
+      setError(null);
 
-      if (error) throw error;
+      await callAdminApi('reject', { submissionId });
 
       setSelectedSubmission(null);
-      loadData();
-    } catch (error) {
-      console.error('Error rejecting submission:', error);
-      alert('Failed to reject submission');
+      await loadData();
+    } catch (err: any) {
+      console.error('Error rejecting submission:', err);
+      setError(err.message || 'Failed to reject submission');
+    } finally {
+      setActionLoading(null);
     }
   }
 
   async function markAsPaid(submissionId: string) {
     try {
-      const { error } = await supabase
-        .from('submissions')
-        .update({ paid: true })
-        .eq('id', submissionId);
+      setActionLoading(submissionId);
+      setError(null);
 
-      if (error) throw error;
-      loadData();
-    } catch (error) {
-      console.error('Error marking as paid:', error);
-      alert('Failed to mark as paid');
+      await callAdminApi('markPaid', { submissionId });
+
+      await loadData();
+    } catch (err: any) {
+      console.error('Error marking as paid:', err);
+      setError(err.message || 'Failed to mark as paid');
+    } finally {
+      setActionLoading(null);
     }
   }
 
@@ -149,14 +166,25 @@ export default function AdminPage() {
     );
   }
 
-  if (publicKey.toString() !== ADMIN_WALLET) {
+  if (publicKey.toBase58() !== ADMIN_WALLET) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
         <div className="text-center text-white">
           <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-400" />
           <h1 className="text-4xl font-bold mb-4">Not Authorized</h1>
           <p className="text-xl">This wallet is not authorized to access the admin panel</p>
-          <p className="text-gray-300 mt-2">Connected: {publicKey.toString().slice(0, 8)}...</p>
+          <p className="text-gray-300 mt-2">Connected: {publicKey.toBase58().slice(0, 8)}...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+        <div className="text-center text-white">
+          <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin" />
+          <p className="text-xl">Loading admin data...</p>
         </div>
       </div>
     );
@@ -166,6 +194,13 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-4xl font-bold text-white mb-8">Admin Dashboard</h1>
+
+        {error && (
+          <div className="bg-red-500/20 border border-red-500 rounded-lg p-4 mb-8 text-red-200">
+            <p className="font-semibold">Error</p>
+            <p>{error}</p>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -249,7 +284,7 @@ export default function AdminPage() {
                   onClick={() => setSelectedSubmission(null)}
                   className="mb-6 text-blue-400 hover:text-blue-300"
                 >
-                  ← Back to Submissions
+                  &larr; Back to Submissions
                 </button>
 
                 <div className="space-y-6">
@@ -315,15 +350,25 @@ export default function AdminPage() {
                   <div className="flex gap-4">
                     <button
                       onClick={() => approveSubmission(selectedSubmission.id)}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg"
+                      disabled={actionLoading === selectedSubmission.id}
+                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2"
                     >
-                      Approve
+                      {actionLoading === selectedSubmission.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        'Approve'
+                      )}
                     </button>
                     <button
                       onClick={() => rejectSubmission(selectedSubmission.id)}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-lg"
+                      disabled={actionLoading === selectedSubmission.id}
+                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2"
                     >
-                      Reject
+                      {actionLoading === selectedSubmission.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        'Reject'
+                      )}
                     </button>
                   </div>
                 </div>
@@ -340,7 +385,7 @@ export default function AdminPage() {
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <p className="text-white font-semibold">@{submission.users?.username}</p>
+                          <p className="text-white font-semibold">@{submission.users?.x_username || 'Unknown'}</p>
                           <p className="text-gray-300 text-sm mt-2">{submission.tweet_text}</p>
                         </div>
                         <span className="bg-yellow-500/20 text-yellow-300 text-xs px-3 py-1 rounded-full">
@@ -350,6 +395,11 @@ export default function AdminPage() {
                       <p className="text-blue-400 text-sm mt-4">Click to review</p>
                     </div>
                   ))}
+                {submissions.filter((s) => s.status === 'pending').length === 0 && (
+                  <div className="text-center text-gray-400 py-12">
+                    No pending submissions
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -361,26 +411,36 @@ export default function AdminPage() {
             <h3 className="text-xl font-semibold text-white mb-6">Pending Payments</h3>
             <div className="space-y-4">
               {submissions
-                .filter((s) => s.status === 'approved' && !s.paid)
+                .filter((s) => s.status === 'approved')
                 .map((submission) => (
                   <div
                     key={submission.id}
                     className="flex justify-between items-center bg-white/5 p-4 rounded-lg border border-white/10"
                   >
                     <div>
-                      <p className="text-white font-semibold">@{submission.users?.username}</p>
+                      <p className="text-white font-semibold">@{submission.users?.x_username || 'Unknown'}</p>
                       <p className="text-gray-400 text-sm">
-                        {(submission.users?.total_earned_lamports / 1000000000 || 0).toFixed(2)} SOL
+                        {((submission.users?.total_earned_lamports || 0) / 1000000000).toFixed(4)} SOL earned
                       </p>
                     </div>
                     <button
                       onClick={() => markAsPaid(submission.id)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+                      disabled={actionLoading === submission.id}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition flex items-center gap-2"
                     >
-                      Mark Paid
+                      {actionLoading === submission.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Mark Paid'
+                      )}
                     </button>
                   </div>
                 ))}
+              {submissions.filter((s) => s.status === 'approved').length === 0 && (
+                <div className="text-center text-gray-400 py-12">
+                  No pending payments
+                </div>
+              )}
             </div>
           </div>
         )}

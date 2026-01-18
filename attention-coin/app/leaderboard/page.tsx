@@ -36,7 +36,7 @@ function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: numb
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.03 }}
-      className={`flex items-center gap-4 p-4 rounded-xl border transition-colors ${
+      className={`flex items-center gap-2 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-colors ${
         isCurrentUser
           ? 'bg-primary/10 border-primary/30'
           : entry.rank <= 3
@@ -45,42 +45,42 @@ function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: numb
       }`}
     >
       {/* Rank */}
-      <div className={`w-10 text-center font-bold ${
+      <div className={`w-8 sm:w-10 text-center font-bold ${
         entry.rank <= 3 ? rankColors[entry.rank] || 'text-muted' : 'text-muted'
       }`}>
-        {entry.rank === 1 && <Crown className="w-6 h-6 mx-auto text-yellow-400" />}
-        {entry.rank === 2 && <Medal className="w-5 h-5 mx-auto text-gray-300" />}
-        {entry.rank === 3 && <Medal className="w-5 h-5 mx-auto text-amber-600" />}
-        {entry.rank > 3 && `#${entry.rank}`}
+        {entry.rank === 1 && <Crown className="w-5 sm:w-6 h-5 sm:h-6 mx-auto text-yellow-400" />}
+        {entry.rank === 2 && <Medal className="w-4 sm:w-5 h-4 sm:h-5 mx-auto text-gray-300" />}
+        {entry.rank === 3 && <Medal className="w-4 sm:w-5 h-4 sm:h-5 mx-auto text-amber-600" />}
+        {entry.rank > 3 && <span className="text-sm sm:text-base">#{entry.rank}</span>}
       </div>
 
       {/* User Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-            <span className="text-primary font-bold text-sm">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+            <span className="text-primary font-bold text-xs sm:text-sm">
               {(entry.x_username || entry.wallet_address).charAt(0).toUpperCase()}
             </span>
           </div>
           <div className="min-w-0">
-            <div className="font-medium truncate">
-              {entry.x_username ? `@${entry.x_username}` : truncateWallet(entry.wallet_address)}
+            <div className="font-medium truncate text-sm sm:text-base">
+              {entry.x_username ? `@${entry.x_username}` : truncateWallet(entry.wallet_address, 4)}
             </div>
-            {entry.x_username && (
-              <div className="text-xs text-muted truncate">
-                {truncateWallet(entry.wallet_address)}
-              </div>
+            {isCurrentUser && (
+              <span className="sm:hidden px-1.5 py-0.5 rounded-full bg-primary/20 text-primary text-[10px]">
+                You
+              </span>
             )}
           </div>
           {isCurrentUser && (
-            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs">
+            <span className="hidden sm:inline px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs">
               You
             </span>
           )}
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats - Hidden on mobile */}
       <div className="hidden sm:flex items-center gap-6">
         <div className="text-right">
           <div className="text-xs text-muted">Posts</div>
@@ -93,9 +93,9 @@ function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: numb
       </div>
 
       {/* Score */}
-      <div className="text-right min-w-[80px]">
-        <div className="text-xs text-muted">Score</div>
-        <div className="font-bold text-lg">{formatNumber(Math.round(entry.total_score))}</div>
+      <div className="text-right min-w-[50px] sm:min-w-[80px]">
+        <div className="text-[10px] sm:text-xs text-muted">Score</div>
+        <div className="font-bold text-base sm:text-lg">{formatNumber(Math.round(entry.total_score))}</div>
       </div>
     </motion.div>
   );
@@ -131,32 +131,32 @@ export default function LeaderboardPage() {
   }, [period, publicKey]);
 
   return (
-    <div className="min-h-screen py-12 px-4">
+    <div className="min-h-screen py-6 sm:py-12 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8 sm:mb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface border border-border mb-6">
+            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-surface border border-border mb-4 sm:mb-6">
               <Trophy className="w-4 h-4 text-yellow-400" />
-              <span className="text-sm text-muted">Top Attention Drivers</span>
+              <span className="text-xs sm:text-sm text-muted">Top Attention Drivers</span>
             </div>
-            <h1 className="text-4xl font-bold mb-4">Leaderboard</h1>
-            <p className="text-muted">
-              Rankings based on total engagement score from approved submissions
+            <h1 className="text-3xl sm:text-4xl font-bold mb-3 sm:mb-4">Leaderboard</h1>
+            <p className="text-sm sm:text-base text-muted">
+              Rankings based on total engagement score
             </p>
           </motion.div>
         </div>
 
         {/* Period Selector */}
-        <div className="flex items-center justify-center gap-2 mb-8 flex-wrap">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 flex-wrap">
           {periods.map((p) => (
             <button
               key={p.key}
               onClick={() => setPeriod(p.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                 period === p.key
                   ? 'bg-primary text-black'
                   : 'bg-surface border border-border text-muted hover:text-white hover:border-border-light'

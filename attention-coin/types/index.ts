@@ -15,6 +15,15 @@ export interface User {
   status: 'active' | 'suspended' | 'blacklisted';
   total_earned_lamports: number;
   total_submissions: number;
+  // Streak fields
+  current_streak: number;
+  longest_streak: number;
+  last_submission_date: string | null;
+  // Referral fields
+  referral_code: string | null;
+  referred_by: string | null;
+  referral_earnings_lamports: number;
+  total_referrals: number;
   created_at: string;
   updated_at: string;
 }

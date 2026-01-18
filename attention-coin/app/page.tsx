@@ -5,18 +5,27 @@ import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
-import { 
-  Zap, 
-  ArrowRight, 
-  Shield, 
-  TrendingUp, 
-  Users, 
+import {
+  Zap,
+  ArrowRight,
+  Shield,
+  TrendingUp,
+  Users,
   CheckCircle2,
   Twitter,
   Wallet,
   DollarSign,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Flame,
+  Gift,
+  Crown,
+  Star,
+  Trophy,
+  Sparkles,
+  Award,
+  Percent,
+  UserPlus,
 } from 'lucide-react';
 import { CONTRACT_ADDRESS, CASHTAG, truncateWallet, formatNumber } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -98,7 +107,7 @@ export default function Home() {
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-[128px]" />
 
       {/* Hero Section */}
-      <section className="relative pt-24 pb-20 px-4">
+      <section className="relative pt-16 sm:pt-24 pb-12 sm:pb-20 px-4">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -106,61 +115,75 @@ export default function Home() {
             transition={{ duration: 0.6 }}
             className="text-center"
           >
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface border border-border mb-8">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-sm text-muted">Now distributing rewards daily</span>
+            {/* Badges */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-6 sm:mb-8">
+              <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-surface border border-border">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <span className="text-xs sm:text-sm text-muted">Payouts every 6 hours</span>
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20">
+                <Flame className="w-3 h-3 text-orange-500" />
+                <span className="text-xs sm:text-sm text-orange-400">Streak Bonuses</span>
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                <Gift className="w-3 h-3 text-cyan-400" />
+                <span className="text-xs sm:text-sm text-cyan-400">10% Referrals</span>
+              </div>
             </div>
 
             {/* Main headline */}
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-4 sm:mb-6">
               <span className="text-white">Earn SOL for</span>
               <br />
               <span className="gradient-text">Driving Attention</span>
             </h1>
 
-            <p className="text-xl text-muted max-w-2xl mx-auto mb-10">
-              Post about <span className="text-white font-semibold">{CASHTAG}</span> on X. 
+            <p className="text-base sm:text-lg md:text-xl text-muted max-w-2xl mx-auto mb-8 sm:mb-10 px-4">
+              Post about <span className="text-white font-semibold">{CASHTAG}</span> on X.
               Get rewarded based on real engagement. No bots. No spam. Just quality content.
             </p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-10 sm:mb-16 px-4">
               {connected ? (
-                <Link href="/dashboard" className="btn-primary flex items-center gap-2">
+                <Link href="/dashboard" className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center">
                   Go to Dashboard
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               ) : (
                 <WalletMultiButton />
               )}
-              <a 
-                href="#how-it-works" 
-                className="btn-secondary flex items-center gap-2"
+              <a
+                href="#how-it-works"
+                className="btn-secondary flex items-center gap-2 w-full sm:w-auto justify-center"
               >
                 How It Works
               </a>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 max-w-xl mx-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 max-w-3xl mx-auto px-2">
               {[
-                { label: 'SOL Paid Out', value: 156, suffix: '+' },
-                { label: 'Creators', value: 2847 },
-                { label: 'Posts Tracked', value: 12459 },
+                { label: 'SOL Paid Out', value: 156, suffix: '+', icon: Wallet, color: 'text-primary' },
+                { label: 'Active Creators', value: 2847, icon: Users, color: 'text-blue-400' },
+                { label: 'Avg Streak', value: 12, suffix: ' days', icon: Flame, color: 'text-orange-400' },
+                { label: 'Referral Bonus', value: 10, suffix: '%', icon: Gift, color: 'text-cyan-400' },
               ].map((stat, i) => (
                 <motion.div
                   key={stat.label}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 + i * 0.1 }}
-                  className="stat-card text-center"
+                  className="bg-surface border border-border rounded-xl p-3 sm:p-5 text-center hover:border-primary/30 transition-colors group"
                 >
-                  <div className="text-2xl sm:text-3xl font-bold text-white mb-1">
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-surface-light flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform`}>
+                    <stat.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${stat.color}`} />
+                  </div>
+                  <div className="text-lg sm:text-2xl font-bold text-white mb-0.5">
                     <AnimatedCounter value={stat.value} />
                     {stat.suffix}
                   </div>
-                  <div className="text-sm text-muted">{stat.label}</div>
+                  <div className="text-[10px] sm:text-xs text-muted">{stat.label}</div>
                 </motion.div>
               ))}
             </div>
@@ -168,20 +191,258 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="relative py-24 px-4 border-t border-border">
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* DEXSCREENER CHART SECTION                                              */}
+      {/* Shows live token price chart from DexScreener                          */}
+      {/* Uses iframe embed - fully responsive with mobile-first design          */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <section className="relative py-12 sm:py-16 px-4 border-t border-border">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-6 sm:mb-8"
+          >
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Live Chart</h2>
+            <p className="text-muted text-sm sm:text-base">Track $ATTENTION in real-time</p>
+          </motion.div>
+
+          {/*
+            DexScreener Embed Container
+            - Uses aspect-ratio for responsive height
+            - Mobile: taller chart (aspect-[4/5]) for better visibility
+            - Desktop: wider chart (sm:aspect-[16/9])
+            - overflow-hidden prevents any scroll issues
+            - rounded corners and border match site theme
+          */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            className="w-full rounded-2xl overflow-hidden border border-border bg-surface"
+          >
+            {/*
+              Responsive iframe container
+              - aspect-[4/5] on mobile gives more vertical space for chart
+              - sm:aspect-[16/9] on larger screens for standard widescreen
+              - max-h prevents chart from being too tall on desktop
+            */}
+            <div className="relative w-full aspect-[4/5] sm:aspect-[16/9] max-h-[600px]">
+              <iframe
+                src={`https://dexscreener.com/solana/${CONTRACT_ADDRESS}?embed=1&theme=dark&trades=0&info=0`}
+                title="DexScreener Chart"
+                className="absolute inset-0 w-full h-full"
+                style={{ border: 'none' }}
+                loading="lazy"
+                allow="clipboard-write"
+              />
+            </div>
+          </motion.div>
+
+          {/* Link to view full chart on DexScreener */}
+          <div className="mt-4 text-center">
+            <a
+              href={`https://dexscreener.com/solana/${CONTRACT_ADDRESS}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-muted hover:text-primary transition-colors"
+            >
+              View full chart on DexScreener
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* BOOST YOUR EARNINGS SECTION                                            */}
+      {/* Explains the three main ways to increase rewards:                      */}
+      {/* 1. Referrals - Invite friends and earn 10% of their earnings           */}
+      {/* 2. Badges - Unlock achievements that prove your status                 */}
+      {/* 3. Multipliers - Stack bonuses to increase every payout                */}
+      {/* Mobile: Single column layout / Desktop: Three columns                  */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <section className="relative py-12 sm:py-20 px-4 border-t border-border">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="text-center mb-8 sm:mb-12"
           >
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">How It Works</h2>
-            <p className="text-muted text-lg">Three simple steps to start earning</p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-4">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-sm text-primary font-medium">Maximize Your Rewards</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3">
+              Boost Your Earnings
+            </h2>
+            <p className="text-muted text-sm sm:text-base max-w-xl mx-auto">
+              Stack rewards with referrals, badges, and multipliers to earn more on every payout.
+            </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          {/*
+            Rewards Feature Cards
+            - Mobile: Single column (grid-cols-1)
+            - Desktop: Three columns (md:grid-cols-3)
+            - Each card explains one reward mechanism
+          */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+
+            {/* Card 1: Referrals */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0 }}
+              className="p-5 sm:p-6 rounded-2xl bg-surface border border-border hover:border-cyan-500/30 transition-colors group"
+            >
+              {/* Icon */}
+              <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-4 group-hover:bg-cyan-500/20 transition-colors">
+                <UserPlus className="w-6 h-6 text-cyan-400" />
+              </div>
+              {/* Title */}
+              <h3 className="text-lg sm:text-xl font-semibold mb-2">Referrals</h3>
+              {/* Description */}
+              <p className="text-sm text-muted mb-4">
+                Invite friends and earn <span className="text-cyan-400 font-semibold">10%</span> of everything they earn. Forever.
+              </p>
+              {/* Feature list */}
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                  <span className="text-muted">Passive income from referrals</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                  <span className="text-muted">No limit on referral count</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                  <span className="text-muted">Unique link in your dashboard</span>
+                </li>
+              </ul>
+            </motion.div>
+
+            {/* Card 2: Badges */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="p-5 sm:p-6 rounded-2xl bg-surface border border-border hover:border-purple-500/30 transition-colors group"
+            >
+              {/* Icon */}
+              <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4 group-hover:bg-purple-500/20 transition-colors">
+                <Award className="w-6 h-6 text-purple-400" />
+              </div>
+              {/* Title */}
+              <h3 className="text-lg sm:text-xl font-semibold mb-2">Badges</h3>
+              {/* Description */}
+              <p className="text-sm text-muted mb-4">
+                Unlock achievement badges by hitting milestones. Each badge proves your <span className="text-purple-400 font-semibold">status</span>.
+              </p>
+              {/* Feature list */}
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <span className="text-muted">Earn badges for activity</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <span className="text-muted">Show off your achievements</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <span className="text-muted">Badges unlock multipliers</span>
+                </li>
+              </ul>
+            </motion.div>
+
+            {/* Card 3: Multipliers */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="p-5 sm:p-6 rounded-2xl bg-surface border border-border hover:border-orange-500/30 transition-colors group"
+            >
+              {/* Icon */}
+              <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center mb-4 group-hover:bg-orange-500/20 transition-colors">
+                <Percent className="w-6 h-6 text-orange-400" />
+              </div>
+              {/* Title */}
+              <h3 className="text-lg sm:text-xl font-semibold mb-2">Multipliers</h3>
+              {/* Description */}
+              <p className="text-sm text-muted mb-4">
+                Stack multipliers from streaks and badges to <span className="text-orange-400 font-semibold">boost every payout</span>.
+              </p>
+              {/* Feature list */}
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                  <span className="text-muted">Up to 1.5x from streaks</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                  <span className="text-muted">Badge bonuses stack</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                  <span className="text-muted">Applied automatically</span>
+                </li>
+              </ul>
+            </motion.div>
+          </div>
+
+          {/* Summary callout - explains how everything works together */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-6 sm:mt-8 p-4 sm:p-6 rounded-xl bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-orange-500/5 border border-border"
+          >
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-center sm:text-left">
+              <div className="flex items-center gap-2">
+                <Gift className="w-5 h-5 text-cyan-400" />
+                <span className="text-sm"><span className="text-white font-medium">Refer</span> <span className="text-muted">friends</span></span>
+              </div>
+              <span className="text-muted hidden sm:block">+</span>
+              <div className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-purple-400" />
+                <span className="text-sm"><span className="text-white font-medium">Earn</span> <span className="text-muted">badges</span></span>
+              </div>
+              <span className="text-muted hidden sm:block">+</span>
+              <div className="flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-400" />
+                <span className="text-sm"><span className="text-white font-medium">Build</span> <span className="text-muted">streaks</span></span>
+              </div>
+              <span className="text-muted hidden sm:block">=</span>
+              <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                <Sparkles className="w-5 h-5 text-primary" />
+                <span className="text-sm text-primary font-semibold">Maximum Earnings</span>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section id="how-it-works" className="relative py-16 sm:py-24 px-4 border-t border-border">
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mb-10 sm:mb-16"
+          >
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">How It Works</h2>
+            <p className="text-muted text-base sm:text-lg">Three simple steps to start earning</p>
+          </motion.div>
+
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {[
               {
                 icon: Wallet,
@@ -208,40 +469,205 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="relative p-8 rounded-2xl bg-surface border border-border card-hover group"
+                className="relative p-5 sm:p-8 rounded-2xl bg-surface border border-border card-hover group"
               >
-                <div className="absolute -top-4 -left-4 w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30">
-                  <span className="text-primary font-bold">{item.step}</span>
+                <div className="absolute -top-3 -left-3 sm:-top-4 sm:-left-4 w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30">
+                  <span className="text-primary font-bold text-sm sm:text-base">{item.step}</span>
                 </div>
-                <div className="w-14 h-14 rounded-xl bg-surface-light flex items-center justify-center mb-6 group-hover:bg-primary/20 transition-colors">
-                  <item.icon className="w-7 h-7 text-primary" />
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-surface-light flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-primary/20 transition-colors">
+                  <item.icon className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold mb-3">{item.title}</h3>
-                <p className="text-muted">{item.description}</p>
+                <h3 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3">{item.title}</h3>
+                <p className="text-sm sm:text-base text-muted">{item.description}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
+      {/* Loyalty Rewards Section */}
+      <section className="relative py-16 sm:py-24 px-4 border-t border-border overflow-hidden">
+        {/* Background glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px]" />
+
+        <div className="max-w-6xl mx-auto relative">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mb-10 sm:mb-16"
+          >
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20 mb-4">
+              <Flame className="w-4 h-4 text-orange-500" />
+              <span className="text-sm text-orange-400 font-medium">Loyalty = More Earnings</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
+              Rewards for <span className="text-gradient">Loyal Creators</span>
+            </h2>
+            <p className="text-muted text-base sm:text-lg max-w-2xl mx-auto">
+              The more consistent you are, the more you earn. Build streaks and refer friends to multiply your rewards.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-2 gap-6 sm:gap-8">
+            {/* Streak Bonuses */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/20"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
+                  <Flame className="w-6 h-6 text-orange-500" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Streak Bonuses</h3>
+                  <p className="text-sm text-muted">Post daily to earn more</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {[
+                  { days: 3, bonus: '1.1x', label: 'Warming Up', color: 'text-yellow-500', bg: 'bg-yellow-500' },
+                  { days: 7, bonus: '1.25x', label: 'On Fire', color: 'text-orange-500', bg: 'bg-orange-500' },
+                  { days: 30, bonus: '1.5x', label: 'Legendary', color: 'text-red-500', bg: 'bg-red-500' },
+                ].map((tier, i) => (
+                  <motion.div
+                    key={tier.days}
+                    initial={{ opacity: 0, x: -10 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    className="flex items-center justify-between p-4 rounded-xl bg-background/50 border border-border"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg ${tier.bg}/20 flex items-center justify-center`}>
+                        <Flame className={`w-5 h-5 ${tier.color}`} />
+                      </div>
+                      <div>
+                        <div className="font-semibold">{tier.days} Day Streak</div>
+                        <div className="text-xs text-muted">{tier.label}</div>
+                      </div>
+                    </div>
+                    <div className={`text-xl font-bold ${tier.color}`}>{tier.bonus}</div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-6 p-4 rounded-xl bg-background/30 border border-dashed border-orange-500/30">
+                <div className="flex items-center gap-2 text-sm">
+                  <Sparkles className="w-4 h-4 text-orange-400" />
+                  <span className="text-orange-300">Bonus multiplied on every approved submission!</span>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Referral Program */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center">
+                  <Gift className="w-6 h-6 text-cyan-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Referral Program</h3>
+                  <p className="text-sm text-muted">Earn when your friends earn</p>
+                </div>
+              </div>
+
+              <div className="text-center py-6">
+                <div className="text-5xl sm:text-6xl font-bold text-gradient mb-2">10%</div>
+                <div className="text-lg text-muted">of every referral's earnings</div>
+                <div className="text-sm text-cyan-400 mt-1">Forever, on every payout</div>
+              </div>
+
+              <div className="space-y-3">
+                {[
+                  { icon: Users, text: 'Refer 5 friends → Recruiter Badge' },
+                  { icon: Crown, text: 'Refer 25 friends → Ambassador Badge' },
+                  { icon: Trophy, text: 'Top referrers featured on leaderboard' },
+                ].map((item, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: 10 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-background/50"
+                  >
+                    <item.icon className="w-5 h-5 text-cyan-400 flex-shrink-0" />
+                    <span className="text-sm">{item.text}</span>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="mt-6 p-4 rounded-xl bg-background/30 border border-dashed border-cyan-500/30">
+                <div className="flex items-center gap-2 text-sm">
+                  <Star className="w-4 h-4 text-cyan-400" />
+                  <span className="text-cyan-300">Get your unique referral link in the dashboard!</span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Badges Preview */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-10 sm:mt-16 text-center"
+          >
+            <h3 className="text-lg font-semibold mb-6">Unlock Achievement Badges</h3>
+            <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+              {[
+                { name: 'First Post', icon: Zap, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+                { name: 'Consistent', icon: Flame, color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+                { name: 'Rising Star', icon: Star, color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+                { name: 'Whale', icon: Wallet, color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+                { name: 'Recruiter', icon: Users, color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+                { name: 'Influencer', icon: Crown, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+              ].map((badge, i) => (
+                <motion.div
+                  key={badge.name}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05 }}
+                  whileHover={{ scale: 1.1, y: -4 }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full border ${badge.color} cursor-default`}
+                >
+                  <badge.icon className="w-4 h-4" />
+                  <span className="text-sm font-medium">{badge.name}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Scoring Section */}
-      <section className="relative py-24 px-4 border-t border-border">
+      <section className="relative py-16 sm:py-24 px-4 border-t border-border">
         <div className="max-w-6xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
             >
-              <h2 className="text-3xl sm:text-4xl font-bold mb-6">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 sm:mb-6">
                 Transparent Scoring
               </h2>
-              <p className="text-muted text-lg mb-8">
+              <p className="text-muted text-sm sm:text-base md:text-lg mb-6 sm:mb-8">
                 Your rewards are calculated using a transparent formula that weights engagement quality over quantity.
               </p>
-              
-              <div className="p-6 rounded-xl bg-surface border border-border mb-6">
-                <code className="text-primary text-lg">
+
+              <div className="p-4 sm:p-6 rounded-xl bg-surface border border-border mb-4 sm:mb-6">
+                <code className="text-primary text-sm sm:text-base md:text-lg">
                   Score = Engagement × Trust × Quality
                 </code>
               </div>
@@ -309,14 +735,14 @@ export default function Home() {
       </section>
 
       {/* Live Activity */}
-      <section className="relative py-24 px-4 border-t border-border">
+      <section className="relative py-16 sm:py-24 px-4 border-t border-border">
         <div className="max-w-6xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12">
+          <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 md:gap-12">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="p-8 rounded-2xl bg-surface border border-border"
+              className="p-5 sm:p-8 rounded-2xl bg-surface border border-border"
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -341,23 +767,23 @@ export default function Home() {
               viewport={{ once: true }}
               className="flex flex-col justify-center"
             >
-              <h2 className="text-3xl sm:text-4xl font-bold mb-6">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 sm:mb-6">
                 Join the Attention Economy
               </h2>
-              <p className="text-muted text-lg mb-8">
+              <p className="text-muted text-sm sm:text-base md:text-lg mb-6 sm:mb-8">
                 Real creators earning real rewards. No gatekeeping. Connect your wallet and start today.
               </p>
               
               {/* Contract Address */}
-              <div className="p-4 rounded-xl bg-surface border border-border">
-                <div className="text-sm text-muted mb-2">Contract Address</div>
+              <div className="p-3 sm:p-4 rounded-xl bg-surface border border-border">
+                <div className="text-xs sm:text-sm text-muted mb-2">Contract Address</div>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 text-white font-mono text-sm truncate">
+                  <code className="flex-1 text-white font-mono text-xs sm:text-sm truncate">
                     {CONTRACT_ADDRESS}
                   </code>
                   <button
                     onClick={copyCA}
-                    className="p-2 rounded-lg bg-surface-light hover:bg-border transition-colors"
+                    className="p-2 rounded-lg bg-surface-light hover:bg-border transition-colors flex-shrink-0"
                     title="Copy"
                   >
                     <Copy className="w-4 h-4 text-muted" />
@@ -366,7 +792,7 @@ export default function Home() {
                     href={`https://solscan.io/token/${CONTRACT_ADDRESS}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-lg bg-surface-light hover:bg-border transition-colors"
+                    className="p-2 rounded-lg bg-surface-light hover:bg-border transition-colors flex-shrink-0"
                     title="View on Solscan"
                   >
                     <ExternalLink className="w-4 h-4 text-muted" />
@@ -379,17 +805,17 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="relative py-24 px-4 border-t border-border">
+      <section className="relative py-16 sm:py-24 px-4 border-t border-border">
         <div className="max-w-3xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-3xl sm:text-4xl font-bold mb-6">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 sm:mb-6">
               Ready to Earn?
             </h2>
-            <p className="text-muted text-lg mb-10">
+            <p className="text-muted text-sm sm:text-base md:text-lg mb-8 sm:mb-10 px-4">
               Connect your wallet, link your X account, and start submitting your best content.
             </p>
             
@@ -406,17 +832,17 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-12 px-4">
+      <footer className="border-t border-border py-8 sm:py-12 px-4">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-primary" />
-              <span className="font-bold">ATTENTION COIN</span>
+              <span className="font-bold text-sm sm:text-base">ATTENTION COIN</span>
             </div>
-            <div className="flex items-center gap-6 text-sm text-muted">
+            <div className="flex items-center gap-3 sm:gap-6 text-xs sm:text-sm text-muted">
               <span>{CASHTAG}</span>
               <span>•</span>
-              <span>{truncateWallet(CONTRACT_ADDRESS, 6)}</span>
+              <span>{truncateWallet(CONTRACT_ADDRESS, 4)}</span>
             </div>
           </div>
         </div>

@@ -1,20 +1,50 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '@/types';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Lazy initialization to avoid build-time errors when env vars aren't available
+let _supabase: SupabaseClient | null = null;
 
-// Client-side Supabase client
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+function getSupabaseUrl(): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
+  }
+  return url;
+}
+
+function getSupabaseAnonKey(): string {
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!key) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is not set');
+  }
+  return key;
+}
+
+// Client-side Supabase client (lazy initialization)
+export const supabase = {
+  get client(): SupabaseClient {
+    if (!_supabase) {
+      _supabase = createClient(getSupabaseUrl(), getSupabaseAnonKey());
+    }
+    return _supabase;
+  },
+  from(table: string) {
+    return this.client.from(table);
+  },
+  rpc(fn: string, params?: any) {
+    return this.client.rpc(fn, params);
+  },
+};
 
 // Server-side client with service role (for API routes)
-export function createServerClient() {
+// Returns untyped client for flexibility in admin operations
+export function createServerClient(): SupabaseClient {
+  const supabaseUrl = getSupabaseUrl();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
-    // Fall back to anon key if service role not available
-    return supabase;
+    console.warn('SUPABASE_SERVICE_ROLE_KEY not set, falling back to anon key');
+    return createClient(supabaseUrl, getSupabaseAnonKey());
   }
-  return createClient<Database>(supabaseUrl, serviceRoleKey, {
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -39,7 +69,7 @@ export async function getUserByWallet(walletAddress: string) {
 }
 
 // Helper to create or update user
-export async function upsertUser(walletAddress: string, data: Partial<Database['public']['Tables']['users']['Insert']> = {}) {
+export async function upsertUser(walletAddress: string, data: Record<string, any> = {}) {
   const { data: user, error } = await supabase
     .from('users')
     .upsert(

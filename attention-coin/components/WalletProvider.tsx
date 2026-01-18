@@ -1,9 +1,11 @@
 'use client';
 
-import { FC, ReactNode, useMemo, createContext, useContext, useState, useEffect, useCallback } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { ReactNode, useMemo, createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
+import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
 import { clusterApiUrl } from '@solana/web3.js';
 import type { User } from '@/types';
 import { supabase, getUserByWallet, upsertUser } from '@/lib/supabase';
@@ -83,7 +85,7 @@ function UserProviderInner({ children }: { children: ReactNode }) {
 }
 
 // Main Wallet Provider
-export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
+export function WalletContextProvider({ children }: { children: ReactNode }): JSX.Element {
   // Use devnet for testing, mainnet for production
   const endpoint = useMemo(() => {
     if (process.env.NEXT_PUBLIC_SOLANA_RPC) {
@@ -100,15 +102,20 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
     []
   );
 
+  // Type assertion needed due to React 18.2 / wallet-adapter type incompatibility
+  const ConnectionProviderAny = ConnectionProvider as any;
+  const WalletProviderAny = WalletProvider as any;
+  const WalletModalProviderAny = WalletModalProvider as any;
+
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
+    <ConnectionProviderAny endpoint={endpoint}>
+      <WalletProviderAny wallets={wallets} autoConnect>
+        <WalletModalProviderAny>
           <UserProviderInner>
             {children}
           </UserProviderInner>
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+        </WalletModalProviderAny>
+      </WalletProviderAny>
+    </ConnectionProviderAny>
   );
-};
+}
