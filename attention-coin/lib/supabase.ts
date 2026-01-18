@@ -33,6 +33,13 @@ export const supabase = {
   rpc(fn: string, params?: any) {
     return this.client.rpc(fn, params);
   },
+  // Real-time subscription methods
+  channel(name: string) {
+    return this.client.channel(name);
+  },
+  removeChannel(channel: ReturnType<SupabaseClient['channel']>) {
+    return this.client.removeChannel(channel);
+  },
 };
 
 // Server-side client with service role (for API routes)

@@ -647,6 +647,76 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
+  // Set up real-time subscriptions for live updates when admin approves
+  useEffect(() => {
+    if (!user) return;
+
+    // Subscribe to changes on user's submissions
+    const submissionsChannel = supabase
+      .channel('dashboard-submissions')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'submissions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          // Refetch data when submissions change
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to changes on user record (for badges, streak, etc.)
+    const userChannel = supabase
+      .channel('dashboard-user')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${user.id}`,
+        },
+        () => {
+          // Refresh user data when user record changes
+          refreshUser();
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to new badges earned
+    const badgesChannel = supabase
+      .channel('dashboard-badges')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'user_badges',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          // Show toast when new badge earned
+          toast.success('New badge earned!', {
+            description: 'Check your badges section!',
+          });
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      supabase.removeChannel(submissionsChannel);
+      supabase.removeChannel(userChannel);
+      supabase.removeChannel(badgesChannel);
+    };
+  }, [user, refreshUser, fetchData]);
+
   // Show loading or redirect
   if (userLoading || !connected) {
     return (

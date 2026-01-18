@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { motion } from 'framer-motion';
 import { Trophy, Medal, TrendingUp, RefreshCw, Crown } from 'lucide-react';
-import { getLeaderboard } from '@/lib/supabase';
+import { getLeaderboard, supabase } from '@/lib/supabase';
 import { formatNumber, truncateWallet } from '@/lib/utils';
 import type { LeaderboardEntry } from '@/types';
 
@@ -108,27 +108,53 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [userRank, setUserRank] = useState<number | null>(null);
 
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoading(true);
-      try {
-        const data = await getLeaderboard(period, 50);
-        setLeaderboard(data);
+  const fetchLeaderboard = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getLeaderboard(period, 50);
+      setLeaderboard(data);
 
-        // Find current user's rank
-        if (publicKey) {
-          const userEntry = data.find(e => e.wallet_address === publicKey.toBase58());
-          setUserRank(userEntry?.rank || null);
-        }
-      } catch (error) {
-        console.error('Error fetching leaderboard:', error);
-      } finally {
-        setLoading(false);
+      // Find current user's rank
+      if (publicKey) {
+        const userEntry = data.find(e => e.wallet_address === publicKey.toBase58());
+        setUserRank(userEntry?.rank || null);
       }
-    };
-
-    fetchLeaderboard();
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [period, publicKey]);
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
+
+  // Real-time subscription for leaderboard updates
+  useEffect(() => {
+    // Subscribe to submission status changes (approved = leaderboard update)
+    const channel = supabase
+      .channel('leaderboard-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'submissions',
+        },
+        (payload) => {
+          // Refetch leaderboard when any submission is updated (e.g., approved)
+          if (payload.new && (payload.new as any).status === 'approved') {
+            fetchLeaderboard();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchLeaderboard]);
 
   return (
     <div className="min-h-screen py-6 sm:py-12 px-4">
