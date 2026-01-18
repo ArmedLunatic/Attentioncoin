@@ -111,6 +111,40 @@ export interface ApiResponse<T = any> {
   error?: string;
 }
 
+// Payout types
+export interface PayoutResult {
+  userId: string;
+  walletAddress: string;
+  amountLamports: number;
+  amountSol: number;
+  success: boolean;
+  txSignature?: string;
+  explorerUrl?: string;
+  error?: string;
+}
+
+export interface PayoutBatch {
+  id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  totalTransfers: number;
+  successfulTransfers: number;
+  failedTransfers: number;
+  totalAmountLamports: number;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface PayoutSummary {
+  batchId: string;
+  totalProcessed: number;
+  successful: number;
+  failed: number;
+  totalAmountLamports: number;
+  results: PayoutResult[];
+  error?: string;
+  duration: number;
+}
+
 export interface UserStats {
   totalEarnedSol: number;
   totalSubmissions: number;

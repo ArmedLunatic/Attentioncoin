@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
+import bs58 from 'bs58';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -41,7 +42,6 @@ import {
   truncateWallet,
   extractTweetId,
   isValidTweetUrl,
-  generateVerificationCode,
   generateContentHash,
   timeAgo,
   CASHTAG,
@@ -51,11 +51,13 @@ import type { Submission, UserStats } from '@/types';
 
 // X Account Linking Component
 function XAccountLinking({ onLinked }: { onLinked: () => void }) {
+  const { publicKey, signMessage } = useWallet();
   const { user, refreshUser } = useUser();
   const [step, setStep] = useState<'start' | 'verify'>('start');
   const [verificationCode, setVerificationCode] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [codeExpiry, setCodeExpiry] = useState<string | null>(null);
 
   // FIX: If user is null, try to create/refresh the user record first.
   // This happens when the wallet is connected but DB record wasn't created yet.
@@ -65,10 +67,46 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
     }
   }, [user, refreshUser]);
 
-  const generateCode = () => {
-    const code = generateVerificationCode();
-    setVerificationCode(code);
-    setStep('verify');
+  const generateCode = async () => {
+    if (!publicKey || !signMessage) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const timestamp = Date.now();
+      const message = `verify-x:generate:${timestamp}`;
+      const messageBytes = new TextEncoder().encode(message);
+      const signatureBytes = await signMessage(messageBytes);
+      const signature = bs58.encode(signatureBytes);
+
+      const response = await fetch('/api/verify-x', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wallet: publicKey.toBase58(),
+          signature,
+          timestamp,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to generate code');
+      }
+
+      setVerificationCode(result.data.code);
+      setCodeExpiry(result.data.expiresAt);
+      setStep('verify');
+      toast.success('Verification code generated!');
+    } catch (error) {
+      console.error('Generate code error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to generate code');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const verifyAccount = async () => {
@@ -77,33 +115,43 @@ function XAccountLinking({ onLinked }: { onLinked: () => void }) {
       return;
     }
 
-    // FIX: Check if user exists before trying to update.
-    // If user is still null, try to refresh first.
-    if (!user?.id) {
-      toast.error('Please wait while we set up your account...');
-      await refreshUser();
+    if (!publicKey || !signMessage) {
+      toast.error('Please connect your wallet first');
       return;
     }
 
     setLoading(true);
     try {
-      // Update user with X info (in production, you'd verify the tweet exists)
-      const { error } = await supabase
-        .from('users')
-        .update({
-          x_username: username.replace('@', ''),
-          x_verified_at: new Date().toISOString(),
-        })
-        .eq('id', user.id); // FIX: Now safely using user.id after null check above
+      const cleanUsername = username.replace('@', '').trim();
+      const timestamp = Date.now();
+      const message = `verify-x:confirm:${cleanUsername}:${timestamp}`;
+      const messageBytes = new TextEncoder().encode(message);
+      const signatureBytes = await signMessage(messageBytes);
+      const signature = bs58.encode(signatureBytes);
 
-      if (error) throw error;
+      const response = await fetch('/api/verify-x', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wallet: publicKey.toBase58(),
+          signature,
+          timestamp,
+          username: cleanUsername,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to verify account');
+      }
 
       toast.success('X account linked successfully!');
       await refreshUser();
       onLinked();
     } catch (error) {
       console.error('Verification error:', error);
-      toast.error('Failed to verify. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to verify. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -134,8 +182,16 @@ ${CASHTAG}`;
           <p className="text-muted">
             To verify you own your X account, you'll post a unique code. This is a one-time process.
           </p>
-          <button onClick={generateCode} className="btn-primary w-full">
-            Generate Verification Code
+          <button
+            onClick={generateCode}
+            disabled={loading}
+            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <RefreshCw className="w-4 h-4 animate-spin mx-auto" />
+            ) : (
+              'Generate Verification Code'
+            )}
           </button>
         </div>
       )}
