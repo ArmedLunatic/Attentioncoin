@@ -15,8 +15,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variants = {
-  primary: 'bg-primary text-black hover:shadow-[0_0_20px_rgba(0,255,136,0.4)] hover:scale-[1.02]',
-  secondary: 'bg-surface-light border border-border text-white hover:border-primary/50 hover:bg-surface',
+  primary: 'bg-primary text-black hover:shadow-[0_0_24px_rgba(16,185,129,0.35)] hover:-translate-y-0.5',
+  secondary: 'bg-surface-light border border-border text-white hover:border-border-light hover:bg-surface',
   ghost: 'text-muted hover:text-white hover:bg-surface-light',
 };
 
@@ -148,21 +148,21 @@ export function GlowButton({
   return (
     <motion.button
       className={`
-        relative px-6 py-3 font-semibold text-black rounded-lg
+        relative px-6 py-3 font-semibold text-black rounded-xl
         bg-primary overflow-hidden
         transition-all duration-300
-        hover:shadow-[0_0_30px_rgba(0,255,136,0.5)]
+        hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]
         ${className}
       `}
-      whileHover={{ scale: 1.02 }}
+      whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       {...props}
     >
       {/* Animated gradient overlay */}
       <motion.div
-        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent"
         animate={{ x: ['-100%', '100%'] }}
-        transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+        transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 1.5 }}
       />
       <span className="relative z-10">{children}</span>
     </motion.button>

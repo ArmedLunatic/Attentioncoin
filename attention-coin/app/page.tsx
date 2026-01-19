@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
@@ -26,9 +26,33 @@ import {
   Award,
   Percent,
   UserPlus,
+  Clock,
+  Coins,
 } from 'lucide-react';
-import { CONTRACT_ADDRESS, CASHTAG, truncateWallet, formatNumber } from '@/lib/utils';
+import { CONTRACT_ADDRESS, CASHTAG, truncateWallet, formatNumber, timeAgo } from '@/lib/utils';
 import { toast } from 'sonner';
+
+// Stats interface
+interface PlatformStats {
+  totalPaidSol: number;
+  activeCreators: number;
+  totalUsers: number;
+  avgStreak: number;
+  pool: {
+    budgetSol: number;
+    maxPerUserSol: number;
+    minPayoutSol: number;
+    totalScore: number;
+    participants: number;
+    intervalHours: number;
+    nextPayoutTime: string;
+  };
+  recentActivity: Array<{
+    username: string;
+    amount: number;
+    time: string;
+  }>;
+}
 
 // Animated counter component
 function AnimatedCounter({ value, duration = 2000 }: { value: number; duration?: number }) {
@@ -83,6 +107,30 @@ function ActivityItem({ username, amount, time }: { username: string; amount: nu
 export default function Home() {
   const { connected } = useWallet();
   const [copied, setCopied] = useState(false);
+  const [stats, setStats] = useState<PlatformStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  // Fetch real stats from API
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await fetch('/api/stats');
+      const result = await response.json();
+      if (result.success) {
+        setStats(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+    // Refresh stats every 60 seconds
+    const interval = setInterval(fetchStats, 60000);
+    return () => clearInterval(interval);
+  }, [fetchStats]);
 
   const copyCA = () => {
     navigator.clipboard.writeText(CONTRACT_ADDRESS);
@@ -91,20 +139,41 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Sample activity data
-  const recentActivity = [
-    { username: 'cryptowhale', amount: 0.45, time: '2m ago' },
-    { username: 'sol_builder', amount: 0.32, time: '5m ago' },
-    { username: 'defi_degen', amount: 0.28, time: '8m ago' },
-    { username: 'web3_creator', amount: 0.21, time: '12m ago' },
-  ];
+  // Calculate time until next payout
+  const getTimeUntilPayout = () => {
+    if (!stats?.pool?.nextPayoutTime) return 'Soon';
+    const now = new Date();
+    const next = new Date(stats.pool.nextPayoutTime);
+    const diff = next.getTime() - now.getTime();
+    if (diff <= 0) return 'Processing...';
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  // Use real data or fallback
+  const displayStats = {
+    totalPaidSol: stats?.totalPaidSol || 0,
+    activeCreators: stats?.activeCreators || 0,
+    avgStreak: stats?.avgStreak || 0,
+    poolBudget: stats?.pool?.budgetSol || 0,
+  };
+
+  const recentActivity = stats?.recentActivity?.length
+    ? stats.recentActivity.map(a => ({
+        username: a.username,
+        amount: a.amount,
+        time: a.time ? timeAgo(a.time) : 'recently',
+      }))
+    : [];
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0 grid-bg opacity-30" />
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[128px]" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-[128px]" />
+      {/* Background effects - refined for premium feel */}
+      <div className="absolute inset-0 grid-bg opacity-20" />
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/8 rounded-full blur-[150px] animate-glow-soft" />
+      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-secondary/8 rounded-full blur-[120px] animate-glow-soft" />
 
       {/* Hero Section */}
       <section className="relative pt-16 sm:pt-24 pb-12 sm:pb-20 px-4">
@@ -119,7 +188,13 @@ export default function Home() {
             <div className="flex flex-wrap items-center justify-center gap-2 mb-6 sm:mb-8">
               <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-surface border border-border">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-xs sm:text-sm text-muted">Payouts every 6 hours</span>
+                <span className="text-xs sm:text-sm text-muted">
+                  {stats?.pool?.intervalHours
+                    ? stats.pool.intervalHours >= 24
+                      ? 'Daily payouts'
+                      : `Payouts every ${stats.pool.intervalHours}h`
+                    : 'Regular payouts'}
+                </span>
               </div>
               <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20">
                 <Flame className="w-3 h-3 text-orange-500" />
@@ -131,15 +206,15 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Main headline */}
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-4 sm:mb-6">
+            {/* Main headline - refined typography */}
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter mb-4 sm:mb-6">
               <span className="text-white">Earn SOL for</span>
               <br />
               <span className="gradient-text">Driving Attention</span>
             </h1>
 
-            <p className="text-base sm:text-lg md:text-xl text-muted max-w-2xl mx-auto mb-8 sm:mb-10 px-4">
-              Post about <span className="text-white font-semibold">{CASHTAG}</span> on X.
+            <p className="text-base sm:text-lg md:text-xl text-muted-light max-w-2xl mx-auto mb-8 sm:mb-10 px-4 leading-relaxed">
+              Post about <span className="text-white font-medium">{CASHTAG}</span> on X.
               Get rewarded based on real engagement. No bots. No spam. Just quality content.
             </p>
 
@@ -161,32 +236,78 @@ export default function Home() {
               </a>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 max-w-3xl mx-auto px-2">
+            {/* Stats - premium cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 max-w-3xl mx-auto px-2">
               {[
-                { label: 'SOL Paid Out', value: 156, suffix: '+', icon: Wallet, color: 'text-primary' },
-                { label: 'Active Creators', value: 2847, icon: Users, color: 'text-blue-400' },
-                { label: 'Avg Streak', value: 12, suffix: ' days', icon: Flame, color: 'text-orange-400' },
-                { label: 'Referral Bonus', value: 10, suffix: '%', icon: Gift, color: 'text-cyan-400' },
+                { label: 'SOL Paid Out', value: displayStats.totalPaidSol, suffix: '', icon: Wallet, color: 'text-primary', bg: 'bg-primary/10' },
+                { label: 'Active Creators', value: displayStats.activeCreators, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                { label: 'Avg Streak', value: displayStats.avgStreak, suffix: ' days', icon: Flame, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+                { label: 'Pool Budget', value: displayStats.poolBudget, suffix: ' SOL', icon: Coins, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
               ].map((stat, i) => (
                 <motion.div
                   key={stat.label}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 + i * 0.1 }}
-                  className="bg-surface border border-border rounded-xl p-3 sm:p-5 text-center hover:border-primary/30 transition-colors group"
+                  className="bg-surface/80 border border-border rounded-2xl p-4 sm:p-5 text-center hover:border-border-light hover:bg-surface transition-all duration-200 group"
                 >
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-surface-light flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform`}>
-                    <stat.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${stat.color}`} />
+                  <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${stat.bg} flex items-center justify-center mx-auto mb-3 group-hover:scale-105 transition-transform duration-200`}>
+                    <stat.icon className={`w-5 h-5 sm:w-5.5 sm:h-5.5 ${stat.color}`} />
                   </div>
-                  <div className="text-lg sm:text-2xl font-bold text-white mb-0.5">
-                    <AnimatedCounter value={stat.value} />
-                    {stat.suffix}
+                  <div className="text-xl sm:text-2xl font-bold text-white mb-1">
+                    {statsLoading ? (
+                      <span className="animate-pulse text-muted">--</span>
+                    ) : (
+                      <>
+                        <AnimatedCounter value={stat.value} />
+                        {stat.suffix}
+                      </>
+                    )}
                   </div>
-                  <div className="text-[10px] sm:text-xs text-muted">{stat.label}</div>
+                  <div className="text-xs sm:text-sm text-muted">{stat.label}</div>
                 </motion.div>
               ))}
             </div>
+
+            {/* Pool Info Banner */}
+            {stats?.pool && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="mt-6 max-w-2xl mx-auto px-2"
+              >
+                <div className="p-4 rounded-xl bg-gradient-to-r from-primary/10 via-surface to-cyan-500/10 border border-primary/20">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="text-center sm:text-left">
+                        <p className="text-sm text-muted">Next Payout In</p>
+                        <p className="text-lg font-bold text-primary">{getTimeUntilPayout()}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-center">
+                      <div>
+                        <p className="text-xs text-muted">Pool Size</p>
+                        <p className="font-semibold">{stats.pool.participants} users</p>
+                      </div>
+                      <div className="w-px h-8 bg-border" />
+                      <div>
+                        <p className="text-xs text-muted">Total Score</p>
+                        <p className="font-semibold">{stats.pool.totalScore.toFixed(0)}</p>
+                      </div>
+                      <div className="w-px h-8 bg-border" />
+                      <div>
+                        <p className="text-xs text-muted">Max/User</p>
+                        <p className="font-semibold">{stats.pool.maxPerUserSol} SOL</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         </div>
       </section>
@@ -438,11 +559,11 @@ export default function Home() {
             viewport={{ once: true }}
             className="text-center mb-10 sm:mb-16"
           >
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">How It Works</h2>
-            <p className="text-muted text-base sm:text-lg">Three simple steps to start earning</p>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 sm:mb-4">How It Works</h2>
+            <p className="text-muted-light text-base sm:text-lg">Three simple steps to start earning</p>
           </motion.div>
 
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
             {[
               {
                 icon: Wallet,
@@ -469,16 +590,16 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="relative p-5 sm:p-8 rounded-2xl bg-surface border border-border card-hover group"
+                className="relative p-6 sm:p-8 rounded-2xl bg-surface/80 border border-border hover:border-border-light hover:bg-surface transition-all duration-200 group"
               >
-                <div className="absolute -top-3 -left-3 sm:-top-4 sm:-left-4 w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30">
-                  <span className="text-primary font-bold text-sm sm:text-base">{item.step}</span>
+                <div className="absolute -top-3 -left-3 sm:-top-3 sm:-left-3 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/15 flex items-center justify-center border border-primary/20">
+                  <span className="text-primary font-bold text-sm">{item.step}</span>
                 </div>
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-surface-light flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-primary/20 transition-colors">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-surface-light flex items-center justify-center mb-4 sm:mb-5 group-hover:bg-primary/10 transition-colors duration-200">
                   <item.icon className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3">{item.title}</h3>
-                <p className="text-sm sm:text-base text-muted">{item.description}</p>
+                <p className="text-sm sm:text-base text-muted leading-relaxed">{item.description}</p>
               </motion.div>
             ))}
           </div>
@@ -755,9 +876,17 @@ export default function Home() {
               </div>
               
               <div className="space-y-1">
-                {recentActivity.map((item, i) => (
-                  <ActivityItem key={i} {...item} />
-                ))}
+                {recentActivity.length > 0 ? (
+                  recentActivity.map((item, i) => (
+                    <ActivityItem key={i} {...item} />
+                  ))
+                ) : (
+                  <div className="py-8 text-center">
+                    <Sparkles className="w-8 h-8 text-muted mx-auto mb-2" />
+                    <p className="text-muted text-sm">No payouts yet</p>
+                    <p className="text-xs text-muted/70">Be the first to earn!</p>
+                  </div>
+                )}
               </div>
             </motion.div>
 
@@ -831,18 +960,20 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-border py-8 sm:py-12 px-4">
+      {/* Footer - refined */}
+      <footer className="border-t border-border py-10 sm:py-14 px-4">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-primary" />
-              <span className="font-bold text-sm sm:text-base">ATTENTION COIN</span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Zap className="w-4 h-4 text-primary" />
+              </div>
+              <span className="font-semibold text-sm sm:text-base tracking-tight">ATTENTION</span>
             </div>
-            <div className="flex items-center gap-3 sm:gap-6 text-xs sm:text-sm text-muted">
-              <span>{CASHTAG}</span>
-              <span>•</span>
-              <span>{truncateWallet(CONTRACT_ADDRESS, 4)}</span>
+            <div className="flex items-center gap-4 sm:gap-6 text-xs sm:text-sm text-muted">
+              <span className="text-muted-light">{CASHTAG}</span>
+              <span className="text-border-light">•</span>
+              <span className="font-mono text-muted">{truncateWallet(CONTRACT_ADDRESS, 4)}</span>
             </div>
           </div>
         </div>

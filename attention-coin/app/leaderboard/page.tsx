@@ -36,12 +36,12 @@ function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: numb
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.03 }}
-      className={`flex items-center gap-2 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-colors ${
+      className={`flex items-center gap-2 sm:gap-4 p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 ${
         isCurrentUser
-          ? 'bg-primary/10 border-primary/30'
+          ? 'bg-primary/8 border-primary/25'
           : entry.rank <= 3
-          ? rankBgs[entry.rank] || 'bg-surface border-border'
-          : 'bg-surface border-border hover:border-border-light'
+          ? rankBgs[entry.rank] || 'bg-surface/80 border-border'
+          : 'bg-surface/80 border-border hover:border-border-light hover:bg-surface'
       }`}
     >
       {/* Rank */}
@@ -159,33 +159,33 @@ export default function LeaderboardPage() {
   return (
     <div className="min-h-screen py-6 sm:py-12 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
+        {/* Header - refined */}
         <div className="text-center mb-8 sm:mb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-surface border border-border mb-4 sm:mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface/80 border border-border mb-4 sm:mb-6">
               <Trophy className="w-4 h-4 text-yellow-400" />
-              <span className="text-xs sm:text-sm text-muted">Top Attention Drivers</span>
+              <span className="text-xs sm:text-sm text-muted-light">Top Attention Drivers</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold mb-3 sm:mb-4">Leaderboard</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3 sm:mb-4">Leaderboard</h1>
             <p className="text-sm sm:text-base text-muted">
               Rankings based on total engagement score
             </p>
           </motion.div>
         </div>
 
-        {/* Period Selector */}
-        <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 flex-wrap">
+        {/* Period Selector - premium styling */}
+        <div className="flex items-center justify-center gap-2 sm:gap-2 mb-8 sm:mb-10 flex-wrap">
           {periods.map((p) => (
             <button
               key={p.key}
               onClick={() => setPeriod(p.key)}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+              className={`px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ${
                 period === p.key
-                  ? 'bg-primary text-black'
-                  : 'bg-surface border border-border text-muted hover:text-white hover:border-border-light'
+                  ? 'bg-primary text-black shadow-glow-sm'
+                  : 'bg-surface/80 border border-border text-muted hover:text-white hover:border-border-light hover:bg-surface'
               }`}
             >
               {p.label}
@@ -198,11 +198,11 @@ export default function LeaderboardPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-6 rounded-2xl bg-primary/10 border border-primary/30 mb-8"
+            className="p-5 sm:p-6 rounded-2xl bg-primary/8 border border-primary/20 mb-8"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-primary" />
                 </div>
                 <div>
@@ -211,7 +211,7 @@ export default function LeaderboardPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-sm text-muted">Keep posting to climb!</div>
+                <div className="text-sm text-muted-light">Keep posting to climb!</div>
               </div>
             </div>
           </motion.div>

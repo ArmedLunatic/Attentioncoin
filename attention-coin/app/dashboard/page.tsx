@@ -28,6 +28,7 @@ import { supabase } from '@/lib/supabase';
 import PayoutTimer from '@/components/PayoutTimer';
 import { StreakDisplay, BadgeGrid, defaultBadges } from '@/components/StreakBadges';
 import ReferralCard from '@/components/ReferralCard';
+import EligibleEarnings from '@/components/EligibleEarnings';
 import {
   AnimatedCounter,
   StatusIndicator,
@@ -153,13 +154,13 @@ ${CASHTAG}`;
   const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
 
   return (
-    <div className="p-8 rounded-2xl bg-surface border border-border">
+    <div className="p-6 sm:p-8 rounded-2xl bg-surface/80 border border-border">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+        <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
           <Twitter className="w-6 h-6 text-blue-400" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold">Link Your X Account</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Link Your X Account</h2>
           <p className="text-muted text-sm">Required to submit tweets for rewards</p>
         </div>
       </div>
@@ -352,12 +353,12 @@ function SubmissionForm({ onSubmitted, onSuccess }: { onSubmitted: () => void; o
 
   return (
     <motion.div
-      className="p-6 rounded-2xl bg-surface border border-border hover:border-border-light transition-colors"
+      className="p-5 sm:p-6 rounded-2xl bg-surface/80 border border-border hover:border-border-light transition-all duration-200"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
           <Send className="w-4 h-4 text-primary" />
         </div>
         Submit a Tweet
@@ -746,21 +747,21 @@ export default function DashboardPage() {
       <Confetti trigger={showConfetti} onComplete={() => setShowConfetti(false)} />
 
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
+        {/* Header - refined */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8"
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 sm:mb-10"
         >
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Dashboard</h1>
-            <p className="text-sm sm:text-base text-muted">Welcome back, <span className="text-white">@{user?.x_username}</span></p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1 sm:mb-2">Dashboard</h1>
+            <p className="text-sm sm:text-base text-muted">Welcome back, <span className="text-white font-medium">@{user?.x_username}</span></p>
           </div>
           <div className="flex items-center gap-3">
             <PayoutTimer compact />
             <Link
               href="/payouts"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-light border border-border text-sm text-muted hover:text-white hover:border-primary/50 transition-all hover:scale-105"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-light border border-border text-sm text-muted hover:text-white hover:border-border-light transition-all duration-200"
             >
               <History className="w-4 h-4" />
               <span className="hidden sm:inline">History</span>
@@ -768,8 +769,8 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        {/* Stats Grid - premium styling */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10">
           {loading ? (
             // Skeleton loading state
             <>
@@ -785,10 +786,10 @@ export default function DashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="bg-surface border border-border rounded-xl p-4 sm:p-6 hover:border-primary/30 transition-colors group"
+                className="bg-surface/80 border border-border rounded-2xl p-4 sm:p-6 hover:border-border-light hover:bg-surface transition-all duration-200 group"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
                     <Wallet className="w-4 h-4 text-primary" />
                   </div>
                   <span className="text-xs sm:text-sm text-muted">Total Earned</span>
@@ -803,10 +804,10 @@ export default function DashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
-                className="bg-surface border border-border rounded-xl p-4 sm:p-6 hover:border-green-500/30 transition-colors group"
+                className="bg-surface/80 border border-border rounded-2xl p-4 sm:p-6 hover:border-border-light hover:bg-surface transition-all duration-200 group"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
                     <CheckCircle2 className="w-4 h-4 text-green-500" />
                   </div>
                   <span className="text-xs sm:text-sm text-muted">Approved Posts</span>
@@ -821,10 +822,10 @@ export default function DashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className="bg-surface border border-border rounded-xl p-4 sm:p-6 hover:border-yellow-500/30 transition-colors group"
+                className="bg-surface/80 border border-border rounded-2xl p-4 sm:p-6 hover:border-border-light hover:bg-surface transition-all duration-200 group"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-yellow-500/10 flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
                     <Clock className="w-4 h-4 text-yellow-500" />
                   </div>
                   <span className="text-xs sm:text-sm text-muted">Pending Review</span>
@@ -839,11 +840,11 @@ export default function DashboardPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 }}
-                className="bg-surface border border-border rounded-xl p-4 sm:p-6 hover:border-blue-500/30 transition-colors group"
+                className="bg-surface/80 border border-border rounded-2xl p-4 sm:p-6 hover:border-border-light hover:bg-surface transition-all duration-200 group"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <TrendingUp className="w-4 h-4 text-blue-400" />
                   </div>
                   <span className="text-xs sm:text-sm text-muted">Trust Score</span>
                 </div>
@@ -853,6 +854,11 @@ export default function DashboardPage() {
               </motion.div>
             </>
           )}
+        </div>
+
+        {/* Eligible Earnings - Prominent display */}
+        <div className="mb-6 sm:mb-8">
+          <EligibleEarnings />
         </div>
 
         {/* Streak & Badges Row */}

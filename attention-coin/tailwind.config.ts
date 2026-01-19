@@ -9,45 +9,90 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#050505',
+        // Premium dark palette - refined for luxury feel
+        background: '#030303',
         surface: '#0a0a0a',
-        'surface-light': '#111111',
-        border: '#1a1a1a',
-        'border-light': '#262626',
-        primary: '#00ff88',
-        'primary-dim': '#00cc6a',
-        secondary: '#8b5cf6',
-        accent: '#ff3366',
-        muted: '#666666',
+        'surface-light': '#141414',
+        'surface-elevated': '#1a1a1a',
+        border: '#1f1f1f',
+        'border-light': '#2a2a2a',
+        // Primary - sophisticated emerald (less harsh than neon)
+        primary: '#10b981',
+        'primary-light': '#34d399',
+        'primary-dim': '#059669',
+        'primary-glow': 'rgba(16, 185, 129, 0.4)',
+        // Secondary - soft violet
+        secondary: '#a78bfa',
+        'secondary-dim': '#8b5cf6',
+        // Accent - warm coral for highlights
+        accent: '#f43f5e',
+        'accent-dim': '#e11d48',
+        // Text colors - improved readability
+        muted: '#737373',
+        'muted-light': '#a3a3a3',
       },
       fontFamily: {
         sans: ['var(--font-geist)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-geist-mono)', 'monospace'],
       },
+      letterSpacing: {
+        'tighter': '-0.02em',
+        'tight': '-0.01em',
+      },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'glow': 'glow 2s ease-in-out infinite alternate',
-        'slide-up': 'slideUp 0.5s ease-out',
-        'slide-down': 'slideDown 0.3s ease-out',
-        'fade-in': 'fadeIn 0.5s ease-out',
+        'glow-soft': 'glowSoft 3s ease-in-out infinite alternate',
+        'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-down': 'slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        'fade-in': 'fadeIn 0.4s ease-out',
+        'scale-in': 'scaleIn 0.2s ease-out',
+        'shimmer': 'shimmer 2s linear infinite',
       },
       keyframes: {
         glow: {
           '0%': { opacity: '0.5' },
           '100%': { opacity: '1' },
         },
+        glowSoft: {
+          '0%': { opacity: '0.6', filter: 'blur(20px)' },
+          '100%': { opacity: '0.8', filter: 'blur(30px)' },
+        },
         slideUp: {
-          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '0%': { transform: 'translateY(16px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
         slideDown: {
-          '0%': { transform: 'translateY(-10px)', opacity: '0' },
+          '0%': { transform: 'translateY(-8px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+        scaleIn: {
+          '0%': { transform: 'scale(0.95)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+      },
+      boxShadow: {
+        'glow-sm': '0 0 12px rgba(16, 185, 129, 0.15)',
+        'glow-md': '0 0 24px rgba(16, 185, 129, 0.2)',
+        'glow-lg': '0 0 40px rgba(16, 185, 129, 0.25)',
+        'glow-primary': '0 0 30px rgba(16, 185, 129, 0.3)',
+        'glow-secondary': '0 0 30px rgba(167, 139, 250, 0.3)',
+        'elevation-1': '0 1px 2px rgba(0, 0, 0, 0.5)',
+        'elevation-2': '0 4px 12px rgba(0, 0, 0, 0.4)',
+        'elevation-3': '0 8px 24px rgba(0, 0, 0, 0.4)',
+      },
+      borderRadius: {
+        'xl': '12px',
+        '2xl': '16px',
+        '3xl': '24px',
       },
     },
   },

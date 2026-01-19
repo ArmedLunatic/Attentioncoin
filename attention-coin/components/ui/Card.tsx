@@ -31,10 +31,10 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     const baseClasses = 'rounded-2xl transition-all duration-300';
 
     const variantClasses = {
-      default: 'bg-surface border border-border',
+      default: 'bg-surface/80 border border-border',
       glass: 'bg-surface/50 backdrop-blur-xl border border-white/10',
       gradient: 'bg-gradient-to-br from-surface to-surface-light border border-border',
-      glow: 'bg-surface border border-primary/20 shadow-[0_0_30px_rgba(0,255,136,0.1)]',
+      glow: 'bg-surface border border-primary/20 shadow-[0_0_30px_rgba(16,185,129,0.08)]',
     };
 
     const hoverClasses = hover
@@ -69,10 +69,10 @@ export const MotionCard = forwardRef<
   const baseClasses = 'rounded-2xl';
 
   const variantClasses = {
-    default: 'bg-surface border border-border',
+    default: 'bg-surface/80 border border-border',
     glass: 'bg-surface/50 backdrop-blur-xl border border-white/10',
     gradient: 'bg-gradient-to-br from-surface to-surface-light border border-border',
-    glow: 'bg-surface border border-primary/20 shadow-[0_0_30px_rgba(0,255,136,0.1)]',
+    glow: 'bg-surface border border-primary/20 shadow-[0_0_30px_rgba(16,185,129,0.08)]',
   };
 
   return (
