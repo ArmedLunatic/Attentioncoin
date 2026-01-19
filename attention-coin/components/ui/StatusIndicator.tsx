@@ -47,11 +47,11 @@ const statusConfig = {
   },
   paid: {
     icon: Wallet,
-    color: 'text-emerald-500',
-    bg: 'bg-emerald-500/20',
-    border: 'border-emerald-500/30',
+    color: 'text-green-600',
+    bg: 'bg-green-600/20',
+    border: 'border-green-600/30',
     label: 'Paid',
-    pulseColor: 'bg-emerald-500',
+    pulseColor: 'bg-green-600',
   },
 };
 

@@ -15,9 +15,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variants = {
-  primary: 'bg-primary text-black hover:shadow-[0_0_24px_rgba(16,185,129,0.35)] hover:-translate-y-0.5',
-  secondary: 'bg-surface-light border border-border text-white hover:border-border-light hover:bg-surface',
-  ghost: 'text-muted hover:text-white hover:bg-surface-light',
+  primary: 'bg-foreground text-background hover:bg-foreground-muted',
+  secondary: 'bg-surface border border-border text-foreground-muted hover:border-border-light hover:text-foreground',
+  ghost: 'text-muted hover:text-foreground hover:bg-surface',
 };
 
 const sizes = {
@@ -139,7 +139,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
 Button.displayName = 'Button';
 
-// Glow button for special CTAs
+// Premium button for special CTAs
 export function GlowButton({
   children,
   className = '',
@@ -148,22 +148,15 @@ export function GlowButton({
   return (
     <motion.button
       className={`
-        relative px-6 py-3 font-semibold text-black rounded-xl
-        bg-primary overflow-hidden
-        transition-all duration-300
-        hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]
+        relative px-6 py-3 font-medium text-background rounded-lg
+        bg-foreground overflow-hidden
+        transition-all duration-200
+        hover:bg-foreground-muted
         ${className}
       `}
-      whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
       {...props}
     >
-      {/* Animated gradient overlay */}
-      <motion.div
-        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent"
-        animate={{ x: ['-100%', '100%'] }}
-        transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 1.5 }}
-      />
       <span className="relative z-10">{children}</span>
     </motion.button>
   );

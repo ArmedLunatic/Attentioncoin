@@ -182,10 +182,10 @@ export default function LeaderboardPage() {
             <button
               key={p.key}
               onClick={() => setPeriod(p.key)}
-              className={`px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ${
+              className={`px-4 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
                 period === p.key
-                  ? 'bg-primary text-black shadow-glow-sm'
-                  : 'bg-surface/80 border border-border text-muted hover:text-white hover:border-border-light hover:bg-surface'
+                  ? 'bg-foreground text-background'
+                  : 'bg-surface border border-border text-muted hover:text-foreground hover:border-border-light'
               }`}
             >
               {p.label}

@@ -406,7 +406,7 @@ function SubmissionForm({ onSubmitted, onSuccess }: { onSubmitted: () => void; o
           </div>
           <div className="h-1.5 bg-surface-light rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-primary to-emerald-400"
+              className="h-full bg-foreground"
               initial={{ width: 0 }}
               animate={{ width: `${(todayCount / maxDaily) * 100}%` }}
               transition={{ duration: 0.5 }}
@@ -417,11 +417,11 @@ function SubmissionForm({ onSubmitted, onSuccess }: { onSubmitted: () => void; o
         <motion.button
           type="submit"
           disabled={loading || success || todayCount >= maxDaily || isValidUrl === false}
-          className={`w-full py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all ${
+          className={`w-full py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
             success
-              ? 'bg-primary text-black'
-              : 'bg-primary text-black hover:shadow-[0_0_20px_rgba(0,255,136,0.4)] hover:scale-[1.02]'
-          } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none`}
+              ? 'bg-foreground text-background'
+              : 'bg-foreground text-background hover:bg-foreground-muted'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
           whileTap={{ scale: 0.98 }}
         >
           <AnimatePresence mode="wait">

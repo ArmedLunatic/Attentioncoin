@@ -9,35 +9,18 @@ import { truncateWallet, isAdminWallet } from '@/lib/utils';
 import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 
-// Premium Logo Component - Abstract "A" with energy element
+// Lightning Logo - preserved brand identity
 function Logo({ className = '' }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 32 32"
+      viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* Abstract A shape with energy bolt */}
       <path
-        d="M16 4L6 28H11L13 22H19L21 28H26L16 4Z"
+        d="M13 2L4.09 12.11C3.95 12.28 3.86 12.49 3.86 12.72C3.86 13.22 4.27 13.63 4.77 13.63H11L10 22L18.91 11.89C19.05 11.72 19.14 11.51 19.14 11.28C19.14 10.78 18.73 10.37 18.23 10.37H12L13 2Z"
         fill="currentColor"
-        fillOpacity="0.9"
-      />
-      {/* Inner cutout for A shape */}
-      <path
-        d="M16 12L13.5 19H18.5L16 12Z"
-        fill="#030303"
-      />
-      {/* Energy accent - electric element */}
-      <path
-        d="M20 8L17 14L21 13L18 20"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        opacity="0.6"
       />
     </svg>
   );
@@ -64,16 +47,16 @@ export default function Header() {
   );
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center group-hover:from-primary/30 group-hover:to-primary/10 transition-all duration-200 shadow-sm">
-              <Logo className="w-5 h-5 text-primary" />
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 flex items-center justify-center">
+              <Logo className="w-6 h-6 text-foreground" />
             </div>
-            <span className="font-bold text-lg tracking-tight">
-              <span className="text-white">ATTENTION</span>
+            <span className="font-display text-base tracking-tight text-foreground">
+              ATTENTION
             </span>
           </Link>
 
@@ -83,10 +66,10 @@ export default function Header() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`px-4 py-2 rounded-lg text-sm transition-colors duration-200 ${
                   pathname === item.href
-                    ? 'bg-surface-light text-white shadow-sm'
-                    : 'text-muted hover:text-white hover:bg-surface-light/60'
+                    ? 'text-foreground bg-surface'
+                    : 'text-muted hover:text-foreground'
                 }`}
               >
                 {item.label}
@@ -97,8 +80,8 @@ export default function Header() {
           {/* Right side */}
           <div className="flex items-center gap-3">
             {connected && user?.x_username && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-light/80 border border-border">
-                <span className="text-sm text-muted-light">@{user.x_username}</span>
+              <div className="hidden sm:flex items-center px-3 py-1.5 text-sm text-muted">
+                @{user.x_username}
               </div>
             )}
 
@@ -107,7 +90,7 @@ export default function Header() {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-surface-light transition-colors"
+              className="md:hidden p-2 rounded-lg text-muted hover:text-foreground transition-colors"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -116,17 +99,17 @@ export default function Header() {
 
         {/* Mobile Nav */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-border animate-slide-down">
+          <div className="md:hidden py-4 border-t border-border">
             <nav className="flex flex-col gap-1">
               {visibleNavItems.map(item => (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`px-4 py-3 rounded-lg text-sm transition-colors duration-200 ${
                     pathname === item.href
-                      ? 'bg-surface-light text-white'
-                      : 'text-muted hover:text-white hover:bg-surface-light/60'
+                      ? 'text-foreground bg-surface'
+                      : 'text-muted hover:text-foreground'
                   }`}
                 >
                   {item.label}
