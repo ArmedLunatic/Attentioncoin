@@ -67,22 +67,9 @@ body {
   background-clip: text;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/* MOTION SYSTEM                                                               */
-/* Rules: 150-250ms, ease-in-out only, no bounce, no playful easing            */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Standard easing - all transitions use this */
-:root {
-  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
-  --duration-fast: 150ms;
-  --duration-default: 200ms;
-  --duration-slow: 250ms;
-}
-
-/* Card hover effect - follows motion rules */
+/* Card hover effect */
 .card-hover {
-  transition: all var(--duration-default) var(--ease-default);
+  transition: all 0.3s ease;
 }
 
 .card-hover:hover {
@@ -177,11 +164,10 @@ body {
   animation: livePulse 2s ease-in-out infinite;
 }
 
-/* Button styles - premium, follows motion rules */
+/* Button styles - premium */
 .btn-primary {
-  @apply bg-primary text-black font-semibold px-6 py-3 rounded-xl;
+  @apply bg-primary text-black font-semibold px-6 py-3 rounded-xl transition-all duration-200;
   letter-spacing: -0.01em;
-  transition: all var(--duration-default) var(--ease-default);
 }
 
 .btn-primary:hover {
@@ -190,13 +176,12 @@ body {
 }
 
 .btn-primary:active {
-  transform: translateY(0) scale(0.98);
+  transform: translateY(0) scale(0.99);
 }
 
 .btn-secondary {
-  @apply bg-surface-light border border-border text-white font-medium px-6 py-3 rounded-xl;
+  @apply bg-surface-light border border-border text-white font-medium px-6 py-3 rounded-xl transition-all duration-200;
   letter-spacing: -0.01em;
-  transition: all var(--duration-default) var(--ease-default);
 }
 
 .btn-secondary:hover {
@@ -205,7 +190,7 @@ body {
 }
 
 .btn-secondary:active {
-  transform: scale(0.98);
+  transform: scale(0.99);
 }
 
 /* Input styles - premium */
@@ -340,24 +325,23 @@ body {
   background-clip: text;
 }
 
-/* Hover lift effect - follows motion rules */
+/* Hover lift effect */
 .hover-lift {
-  transition: transform var(--duration-default) var(--ease-default),
-              box-shadow var(--duration-default) var(--ease-default);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .hover-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
 }
 
-/* Scale on hover - subtle, per motion rules (0.98 → 1) */
+/* Scale on hover */
 .hover-scale {
-  transition: transform var(--duration-fast) var(--ease-default);
+  transition: transform 0.2s ease;
 }
 
 .hover-scale:hover {
-  transform: scale(1.01);
+  transform: scale(1.02);
 }
 
 /* Focus ring for accessibility */
@@ -366,11 +350,11 @@ body {
   box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 4px #10b981;
 }
 
-/* Smooth reveal animation - follows motion rules (250ms max) */
+/* Smooth reveal animation */
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
@@ -379,21 +363,21 @@ body {
 }
 
 .animate-fade-in-up {
-  animation: fadeInUp var(--duration-slow) var(--ease-default) forwards;
+  animation: fadeInUp 0.5s ease forwards;
 }
 
-/* Stagger children animation - follows motion rules */
+/* Stagger children animation */
 .stagger-children > * {
   opacity: 0;
-  animation: fadeInUp var(--duration-default) var(--ease-default) forwards;
+  animation: fadeInUp 0.4s ease forwards;
 }
 
-.stagger-children > *:nth-child(1) { animation-delay: 0.03s; }
-.stagger-children > *:nth-child(2) { animation-delay: 0.06s; }
-.stagger-children > *:nth-child(3) { animation-delay: 0.09s; }
-.stagger-children > *:nth-child(4) { animation-delay: 0.12s; }
-.stagger-children > *:nth-child(5) { animation-delay: 0.15s; }
-.stagger-children > *:nth-child(6) { animation-delay: 0.18s; }
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
 
 /* Floating animation */
 @keyframes float {
@@ -440,11 +424,11 @@ body {
   animation: successFlash 0.5s ease;
 }
 
-/* Slide animations - follows motion rules */
+/* Slide animations */
 @keyframes slideInRight {
   from {
     opacity: 0;
-    transform: translateX(12px);
+    transform: translateX(20px);
   }
   to {
     opacity: 1;
@@ -455,7 +439,7 @@ body {
 @keyframes slideInLeft {
   from {
     opacity: 0;
-    transform: translateX(-12px);
+    transform: translateX(-20px);
   }
   to {
     opacity: 1;
@@ -464,11 +448,11 @@ body {
 }
 
 .animate-slide-in-right {
-  animation: slideInRight var(--duration-default) var(--ease-default) forwards;
+  animation: slideInRight 0.3s ease forwards;
 }
 
 .animate-slide-in-left {
-  animation: slideInLeft var(--duration-default) var(--ease-default) forwards;
+  animation: slideInLeft 0.3s ease forwards;
 }
 
 /* Depth shadows */
@@ -487,20 +471,12 @@ body {
               0 6px 6px rgba(0, 0, 0, 0.4);
 }
 
-/* Button press effect - follows motion rules (scale 0.98) */
-.btn-press {
-  transition: transform var(--duration-fast) var(--ease-default);
-}
-
+/* Button press effect */
 .btn-press:active {
   transform: scale(0.98);
 }
 
-/* Input focus animation - follows motion rules */
-.input-focus-glow {
-  transition: box-shadow var(--duration-fast) var(--ease-default);
-}
-
+/* Input focus animation */
 .input-focus-glow:focus {
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }

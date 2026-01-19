@@ -40,16 +40,14 @@ const config: Config = {
         'tight': '-0.01em',
       },
       animation: {
-        // Ambient animations (can be longer)
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'glow': 'glow 2s ease-in-out infinite alternate',
         'glow-soft': 'glowSoft 3s ease-in-out infinite alternate',
+        'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-down': 'slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        'fade-in': 'fadeIn 0.4s ease-out',
+        'scale-in': 'scaleIn 0.2s ease-out',
         'shimmer': 'shimmer 2s linear infinite',
-        // UI animations - follow motion rules (150-250ms, ease-in-out)
-        'slide-up': 'slideUp 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        'slide-down': 'slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        'fade-in': 'fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        'scale-in': 'scaleIn 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
       },
       keyframes: {
         glow: {
@@ -60,9 +58,8 @@ const config: Config = {
           '0%': { opacity: '0.6', filter: 'blur(20px)' },
           '100%': { opacity: '0.8', filter: 'blur(30px)' },
         },
-        // UI keyframes - subtle, per motion rules
         slideUp: {
-          '0%': { transform: 'translateY(12px)', opacity: '0' },
+          '0%': { transform: 'translateY(16px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
         slideDown: {
@@ -74,8 +71,7 @@ const config: Config = {
           '100%': { opacity: '1' },
         },
         scaleIn: {
-          // Per motion rules: scale 0.98 → 1
-          '0%': { transform: 'scale(0.98)', opacity: '0' },
+          '0%': { transform: 'scale(0.95)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
         },
         shimmer: {
