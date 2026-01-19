@@ -13,7 +13,7 @@ import type { PayoutBatch, PayoutResult, PayoutSummary } from '@/types';
 // Default config values (used if not found in database)
 const DEFAULT_CONFIG = {
   daily_budget_sol: 10,
-  max_per_user_sol: 1,
+  max_per_user_sol: 0.5,
   min_payout_sol: 0.001,
 };
 
