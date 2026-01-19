@@ -1,24 +1,10 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { GeistSans } from 'geist/font/sans';
+import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'sonner';
 import { WalletContextProvider } from '@/components/WalletProvider';
 import Header from '@/components/Header';
 import './globals.css';
-
-// Primary font - Inter for body text
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-});
-
-// Display font - Inter Tight for headlines
-const interTight = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter-tight',
-  weight: ['500', '600', '700'],
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://attention-coin.vercel.app'),
@@ -43,11 +29,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${inter.variable} ${interTight.variable}`}>
+    <html lang="en" className={`dark ${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="min-h-screen bg-background text-foreground antialiased font-sans">
+        {/* Subtle atmospheric gradient - restrained, not decorative */}
+        <div
+          className="fixed inset-0 pointer-events-none z-0"
+          style={{
+            background: `
+              radial-gradient(ellipse 80% 50% at 50% -20%, rgba(4, 120, 87, 0.08) 0%, transparent 60%),
+              #060608
+            `,
+          }}
+          aria-hidden="true"
+        />
+
         <WalletContextProvider>
           <Header />
-          <main className="pt-16">
+          <main className="pt-[72px] relative z-10">
             {children}
           </main>
           <Toaster
@@ -55,10 +53,10 @@ export default function RootLayout({
             position="bottom-right"
             toastOptions={{
               style: {
-                background: '#121214',
-                border: '1px solid #27272a',
-                color: '#fafaf9',
-                fontFamily: 'var(--font-inter), system-ui, sans-serif',
+                background: '#0c0c10',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                color: '#f4f4f5',
+                fontFamily: 'var(--font-geist-sans), system-ui, sans-serif',
               },
             }}
           />

@@ -5,11 +5,11 @@ import { usePathname } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useUser } from './WalletProvider';
-import { truncateWallet, isAdminWallet } from '@/lib/utils';
+import { isAdminWallet } from '@/lib/utils';
 import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 
-// Lightning Logo - preserved brand identity
+// Lightning Logo
 function Logo({ className = '' }: { className?: string }) {
   return (
     <svg
@@ -47,15 +47,13 @@ export default function Header() {
   );
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-16">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-white/[0.04]">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between h-[72px]">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 flex items-center justify-center">
-              <Logo className="w-6 h-6 text-foreground" />
-            </div>
-            <span className="font-display text-base tracking-tight text-foreground">
+            <Logo className="w-5 h-5 text-emerald-500" />
+            <span className="font-display text-body-sm text-foreground">
               ATTENTION
             </span>
           </Link>
@@ -66,10 +64,10 @@ export default function Header() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-4 py-2 rounded-lg text-sm transition-colors duration-200 ${
+                className={`px-3 py-2 rounded-lg text-body-sm transition-colors duration-150 ${
                   pathname === item.href
-                    ? 'text-foreground bg-surface'
-                    : 'text-muted hover:text-foreground'
+                    ? 'text-foreground bg-white/[0.04]'
+                    : 'text-text-tertiary hover:text-foreground'
                 }`}
               >
                 {item.label}
@@ -80,7 +78,7 @@ export default function Header() {
           {/* Right side */}
           <div className="flex items-center gap-3">
             {connected && user?.x_username && (
-              <div className="hidden sm:flex items-center px-3 py-1.5 text-sm text-muted">
+              <div className="hidden sm:block text-body-sm text-text-tertiary">
                 @{user.x_username}
               </div>
             )}
@@ -90,7 +88,8 @@ export default function Header() {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg text-muted hover:text-foreground transition-colors"
+              className="md:hidden p-2 rounded-lg text-text-tertiary hover:text-foreground transition-colors"
+              aria-label="Toggle menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -99,17 +98,17 @@ export default function Header() {
 
         {/* Mobile Nav */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-border">
+          <div className="md:hidden py-4 border-t border-white/[0.04]">
             <nav className="flex flex-col gap-1">
               {visibleNavItems.map(item => (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`px-4 py-3 rounded-lg text-sm transition-colors duration-200 ${
+                  className={`px-3 py-3 rounded-lg text-body-sm transition-colors duration-150 ${
                     pathname === item.href
-                      ? 'text-foreground bg-surface'
-                      : 'text-muted hover:text-foreground'
+                      ? 'text-foreground bg-white/[0.04]'
+                      : 'text-text-tertiary hover:text-foreground'
                   }`}
                 >
                   {item.label}

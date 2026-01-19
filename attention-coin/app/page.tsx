@@ -4,10 +4,16 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { motion } from 'framer-motion';
+import { motion, useSpring, useTransform } from 'framer-motion';
 import { ArrowRight, Copy, ExternalLink } from 'lucide-react';
 import { CONTRACT_ADDRESS, CASHTAG, truncateWallet, formatNumber, timeAgo } from '@/lib/utils';
 import { toast } from 'sonner';
+import { EvidencePanel, EvidencePanelHeader, LiveIndicator } from '@/components/ui/EvidencePanel';
+import { EvidenceFeed } from '@/components/ui/EvidenceFeed';
+import { DepthField } from '@/components/ui/DepthField';
+import { TiltPanel } from '@/components/ui/TiltPanel';
+import { DexScreenerButton, XCommunityButton } from '@/components/ui/MagneticButton';
+import { useScrollVelocity } from '@/hooks/usePhysics';
 
 // Stats interface
 interface PlatformStats {
@@ -28,7 +34,58 @@ interface PlatformStats {
     username: string;
     amount: number;
     time: string;
+    txSignature?: string;
   }>;
+}
+
+// Animated number with momentum
+function MomentumStat({ value, label }: { value: number; label: string }) {
+  const [displayValue, setDisplayValue] = useState(0);
+  const scrollVelocity = useScrollVelocity(0.1);
+
+  // Spring for the momentum effect
+  const momentum = useSpring(0, { stiffness: 300, damping: 30 });
+
+  useEffect(() => {
+    // Update momentum based on scroll velocity
+    momentum.set(scrollVelocity.velocity * 0.5);
+  }, [scrollVelocity.velocity, momentum]);
+
+  // Transform momentum to rotation
+  const rotation = useTransform(momentum, [-10, 0, 10], [-2, 0, 2]);
+
+  useEffect(() => {
+    const duration = 1500;
+    const steps = 60;
+    const increment = value / steps;
+    let current = 0;
+
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= value) {
+        setDisplayValue(value);
+        clearInterval(timer);
+      } else {
+        setDisplayValue(Math.floor(current));
+      }
+    }, duration / steps);
+
+    return () => clearInterval(timer);
+  }, [value]);
+
+  return (
+    <motion.div
+      className="text-center"
+      style={{ rotateZ: rotation }}
+    >
+      <div className="text-display-sm sm:text-display-md font-display text-foreground tabular-nums">
+        {formatNumber(displayValue)}
+      </div>
+      <div className="text-caption uppercase tracking-widest text-text-tertiary mt-1">
+        {label}
+      </div>
+    </motion.div>
+  );
 }
 
 // Lightning Logo
@@ -46,31 +103,6 @@ function Logo({ className = '' }: { className?: string }) {
       />
     </svg>
   );
-}
-
-// Animated counter
-function AnimatedCounter({ value, duration = 2000 }: { value: number; duration?: number }) {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    let start = 0;
-    const end = value;
-    const increment = end / (duration / 16);
-
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= end) {
-        setCount(end);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(start));
-      }
-    }, 16);
-
-    return () => clearInterval(timer);
-  }, [value, duration]);
-
-  return <span className="tabular-nums">{formatNumber(count)}</span>;
 }
 
 export default function Home() {
@@ -95,7 +127,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 60000);
+    const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 
@@ -106,168 +138,241 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const displayStats = {
-    totalPaidSol: stats?.totalPaidSol || 0,
-    activeCreators: stats?.activeCreators || 0,
-    poolBudget: stats?.pool?.budgetSol || 0,
-  };
+  // Transform activity data for EvidenceFeed
+  const evidenceItems = (stats?.recentActivity || []).map((item, i) => ({
+    id: `payout-${i}-${item.username}`,
+    username: item.username,
+    amount: item.amount,
+    time: item.time ? timeAgo(item.time) : '',
+    txSignature: item.txSignature,
+  }));
 
-  const recentActivity = stats?.recentActivity?.slice(0, 5) || [];
+  const totalPaid = stats?.totalPaidSol || 0;
+  const creatorCount = stats?.activeCreators || 0;
 
   return (
     <div className="relative min-h-screen">
-      {/* Hero Section */}
-      <section className="relative pt-24 sm:pt-32 pb-20 sm:pb-28 px-4">
-        <div className="max-w-4xl mx-auto">
+      {/* ============================================ */}
+      {/* DEPTH FIELD - Living Background             */}
+      {/* ============================================ */}
+      <DepthField />
+
+      {/* ============================================ */}
+      {/* HERO: RESPONSIVE DEPTH EXPERIENCE           */}
+      {/* ============================================ */}
+      <section className="relative pt-24 sm:pt-32 pb-16 sm:pb-24 px-4 z-10">
+        <div className="max-w-2xl mx-auto">
+          {/* The Claim - Brief, confident */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
+            transition={{ duration: 0.6, ease: [0.32, 0.72, 0, 1] }}
+            className="text-center mb-8 sm:mb-10"
           >
-            {/* Main headline */}
-            <h1 className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl tracking-tight text-foreground mb-6">
+            <h1 className="font-display text-display-md sm:text-display-lg lg:text-display-xl text-foreground mb-4">
               Earn SOL for
               <br />
-              Driving Attention
+              <span className="text-emerald-400">Driving Attention</span>
             </h1>
-
-            <p className="text-lg sm:text-xl text-muted max-w-2xl mx-auto mb-10 leading-relaxed">
+            <p className="text-body-md sm:text-body-lg text-text-secondary max-w-md mx-auto">
               Post about {CASHTAG} on X. Get rewarded based on real engagement.
-              <br className="hidden sm:block" />
-              Quality content. Transparent scoring. Direct payouts.
             </p>
+          </motion.div>
 
-            {/* CTA */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              {connected ? (
-                <Link href="/dashboard" className="btn-primary flex items-center gap-2">
-                  Go to Dashboard
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              ) : (
-                <WalletMultiButton />
-              )}
-              <a href="#how-it-works" className="btn-secondary">
-                How It Works
-              </a>
-            </div>
+          {/* Utility Access Nodes - Dex + X */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1, ease: [0.32, 0.72, 0, 1] }}
+            className="flex flex-wrap items-center justify-center gap-3 mb-8 sm:mb-10"
+          >
+            <DexScreenerButton tokenAddress={CONTRACT_ADDRESS} />
+            <XCommunityButton handle="AttentionSol" />
+          </motion.div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-6 sm:gap-8 max-w-xl mx-auto">
-              <div className="text-center">
-                <div className="text-2xl sm:text-3xl font-display text-foreground mb-1">
-                  {statsLoading ? (
-                    <span className="text-muted">--</span>
-                  ) : (
-                    <AnimatedCounter value={displayStats.totalPaidSol} />
-                  )}
-                </div>
-                <div className="text-sm text-muted">SOL Paid</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl sm:text-3xl font-display text-foreground mb-1">
-                  {statsLoading ? (
-                    <span className="text-muted">--</span>
-                  ) : (
-                    <AnimatedCounter value={displayStats.activeCreators} />
-                  )}
-                </div>
-                <div className="text-sm text-muted">Creators</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl sm:text-3xl font-display text-foreground mb-1">
-                  {statsLoading ? (
-                    <span className="text-muted">--</span>
-                  ) : (
-                    <AnimatedCounter value={displayStats.poolBudget} />
-                  )}
-                </div>
-                <div className="text-sm text-muted">Pool SOL</div>
-              </div>
-            </div>
+          {/* The Evidence - Dominant element with 3D tilt */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.2, ease: [0.32, 0.72, 0, 1] }}
+          >
+            <TiltPanel maxTilt={4} glareEnabled={true}>
+              <EvidencePanel>
+                <EvidencePanelHeader
+                  title="Recent Payouts"
+                  badge={<LiveIndicator />}
+                />
+                <EvidenceFeed
+                  items={evidenceItems}
+                  maxVisible={4}
+                  autoScrollInterval={3500}
+                />
+              </EvidencePanel>
+            </TiltPanel>
+          </motion.div>
+
+          {/* Stats with Momentum */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="flex justify-center gap-16 sm:gap-20 mt-12 sm:mt-14"
+          >
+            <MomentumStat value={totalPaid} label="SOL Paid" />
+            <MomentumStat value={creatorCount} label="Creators" />
+          </motion.div>
+
+          {/* CTAs */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.5, ease: [0.32, 0.72, 0, 1] }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-10 sm:mt-12"
+          >
+            {connected ? (
+              <Link
+                href="/dashboard"
+                className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center"
+              >
+                Go to Dashboard
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            ) : (
+              <WalletMultiButton />
+            )}
+            <a
+              href="#how-it-works"
+              className="btn-secondary w-full sm:w-auto text-center"
+            >
+              Learn More
+            </a>
           </motion.div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="py-20 sm:py-28 px-4 border-t border-border">
-        <div className="max-w-4xl mx-auto">
+      {/* ============================================ */}
+      {/* HOW IT WORKS                                 */}
+      {/* ============================================ */}
+      <section id="how-it-works" className="relative py-20 sm:py-28 px-4 border-t border-white/[0.04] z-10">
+        <div className="max-w-3xl mx-auto">
           <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
           >
-            <h2 className="font-display text-2xl sm:text-3xl text-foreground mb-12 text-center">
+            <h2 className="font-display text-display-sm sm:text-display-md text-foreground mb-12 sm:mb-16 text-center">
               How It Works
             </h2>
 
-            <div className="grid sm:grid-cols-3 gap-8 sm:gap-12">
-              <div className="text-center sm:text-left">
-                <div className="text-muted-light text-sm mb-3 font-mono">01</div>
-                <h3 className="font-display text-lg text-foreground mb-2">Connect</h3>
-                <p className="text-muted text-sm leading-relaxed">
-                  Link your Solana wallet and X account to get started.
-                </p>
-              </div>
-              <div className="text-center sm:text-left">
-                <div className="text-muted-light text-sm mb-3 font-mono">02</div>
-                <h3 className="font-display text-lg text-foreground mb-2">Create</h3>
-                <p className="text-muted text-sm leading-relaxed">
-                  Post quality content about {CASHTAG} or include the contract address.
-                </p>
-              </div>
-              <div className="text-center sm:text-left">
-                <div className="text-muted-light text-sm mb-3 font-mono">03</div>
-                <h3 className="font-display text-lg text-foreground mb-2">Earn</h3>
-                <p className="text-muted text-sm leading-relaxed">
-                  Receive SOL based on your content's engagement metrics.
-                </p>
-              </div>
+            <div className="grid sm:grid-cols-3 gap-10 sm:gap-8">
+              {[
+                {
+                  step: '01',
+                  title: 'Connect',
+                  description: 'Link your Solana wallet and verify your X account.',
+                },
+                {
+                  step: '02',
+                  title: 'Create',
+                  description: `Post quality content about ${CASHTAG} on X.`,
+                },
+                {
+                  step: '03',
+                  title: 'Earn',
+                  description: 'Receive SOL based on your engagement metrics.',
+                },
+              ].map((item, i) => (
+                <motion.div
+                  key={item.step}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: i * 0.1 }}
+                  className="text-center sm:text-left"
+                >
+                  <div className="text-emerald-500 text-caption font-mono mb-3">
+                    {item.step}
+                  </div>
+                  <h3 className="font-display text-heading-lg text-foreground mb-2">
+                    {item.title}
+                  </h3>
+                  <p className="text-body-sm text-text-secondary leading-relaxed">
+                    {item.description}
+                  </p>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Mechanics */}
-      <section className="py-20 sm:py-28 px-4 border-t border-border">
-        <div className="max-w-4xl mx-auto">
+      {/* ============================================ */}
+      {/* MECHANICS                                    */}
+      {/* ============================================ */}
+      <section className="relative py-20 sm:py-28 px-4 border-t border-white/[0.04] z-10">
+        <div className="max-w-3xl mx-auto">
           <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
           >
-            <h2 className="font-display text-2xl sm:text-3xl text-foreground mb-12 text-center">
+            <h2 className="font-display text-display-sm sm:text-display-md text-foreground mb-12 sm:mb-16 text-center">
               Transparent Mechanics
             </h2>
 
-            <div className="grid sm:grid-cols-2 gap-12">
+            <div className="grid sm:grid-cols-2 gap-12 sm:gap-16">
               <div>
-                <h3 className="font-display text-lg text-foreground mb-4">Scoring</h3>
-                <div className="space-y-3 text-sm text-muted">
-                  <p>Engagement weighted by value: quotes, reposts, replies, likes.</p>
-                  <p>Account trust factors: age, followers, history.</p>
-                  <p>Content quality signals: length, originality, media.</p>
-                </div>
-                <div className="mt-6 p-4 bg-surface rounded-lg border border-border">
-                  <code className="text-sm text-muted-light">
-                    Score = Engagement x Trust x Quality
+                <h3 className="font-display text-heading-lg text-foreground mb-4">
+                  Scoring
+                </h3>
+                <ul className="space-y-3 text-body-sm text-text-secondary">
+                  <li className="flex gap-3">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 mt-2 flex-shrink-0" />
+                    Engagement weighted by value: quotes, reposts, replies, likes
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 mt-2 flex-shrink-0" />
+                    Account trust factors: age, followers, history
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 mt-2 flex-shrink-0" />
+                    Content quality signals: length, originality, media
+                  </li>
+                </ul>
+                <div className="mt-6 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <code className="text-body-sm text-text-secondary font-mono">
+                    Score = Engagement × Trust × Quality
                   </code>
                 </div>
               </div>
 
               <div>
-                <h3 className="font-display text-lg text-foreground mb-4">Payouts</h3>
-                <div className="space-y-3 text-sm text-muted">
-                  <p>Pool distributed proportionally to scores.</p>
-                  <p>Streak bonuses: 3-day, 7-day, 30-day multipliers.</p>
-                  <p>Referral earnings: 10% of referred users' payouts.</p>
-                </div>
-                <div className="mt-6 p-4 bg-surface rounded-lg border border-border">
-                  <code className="text-sm text-muted-light">
-                    {stats?.pool?.intervalHours ? (
-                      stats.pool.intervalHours >= 24 ? 'Payouts: Daily' : `Payouts: Every ${stats.pool.intervalHours}h`
-                    ) : 'Payouts: Regular intervals'}
+                <h3 className="font-display text-heading-lg text-foreground mb-4">
+                  Payouts
+                </h3>
+                <ul className="space-y-3 text-body-sm text-text-secondary">
+                  <li className="flex gap-3">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 mt-2 flex-shrink-0" />
+                    Pool distributed proportionally to scores
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 mt-2 flex-shrink-0" />
+                    Streak bonuses: 3-day, 7-day, 30-day multipliers
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500 mt-2 flex-shrink-0" />
+                    Referral earnings: 10% of referred users' payouts
+                  </li>
+                </ul>
+                <div className="mt-6 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <code className="text-body-sm text-text-secondary font-mono">
+                    {stats?.pool?.intervalHours
+                      ? stats.pool.intervalHours >= 24
+                        ? 'Payouts: Daily'
+                        : `Payouts: Every ${stats.pool.intervalHours}h`
+                      : 'Payouts: Regular intervals'}
                   </code>
                 </div>
               </div>
@@ -276,121 +381,132 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Roadmap */}
-      <section className="py-20 sm:py-28 px-4 border-t border-border">
-        <div className="max-w-4xl mx-auto">
+      {/* ============================================ */}
+      {/* ROADMAP                                      */}
+      {/* ============================================ */}
+      <section className="relative py-20 sm:py-28 px-4 border-t border-white/[0.04] z-10">
+        <div className="max-w-2xl mx-auto">
           <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
           >
-            <h2 className="font-display text-2xl sm:text-3xl text-foreground mb-12 text-center">
+            <h2 className="font-display text-display-sm sm:text-display-md text-foreground mb-12 sm:mb-16 text-center">
               Protocol Evolution
             </h2>
 
-            <div className="space-y-12">
-              {/* Phase 1 */}
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-2 h-2 rounded-full bg-foreground" />
-                  <h3 className="font-display text-lg text-foreground">Foundation</h3>
-                </div>
-                <div className="ml-5 pl-4 border-l border-border space-y-2 text-sm text-muted">
-                  <p>Core payout infrastructure operational</p>
-                  <p>Engagement scoring engine deployed</p>
-                  <p>Wallet verification and linking</p>
-                  <p>Manual approval workflow established</p>
-                </div>
-              </div>
+            <div className="relative">
+              {/* Vertical line */}
+              <div className="absolute left-[9px] top-2 bottom-2 w-px bg-gradient-to-b from-emerald-500/50 via-white/10 to-transparent" />
 
-              {/* Phase 2 */}
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-2 h-2 rounded-full bg-muted" />
-                  <h3 className="font-display text-lg text-foreground">Automation</h3>
-                </div>
-                <div className="ml-5 pl-4 border-l border-border space-y-2 text-sm text-muted">
-                  <p>Automated content detection and scoring</p>
-                  <p>Enhanced anti-gaming protections</p>
-                  <p>Expanded engagement metrics</p>
-                  <p>Performance-based tier system</p>
-                </div>
-              </div>
+              <div className="space-y-10">
+                {[
+                  {
+                    phase: 'Foundation',
+                    status: 'active',
+                    items: [
+                      'Core payout infrastructure operational',
+                      'Engagement scoring engine deployed',
+                      'Wallet verification and linking',
+                    ],
+                  },
+                  {
+                    phase: 'Automation',
+                    status: 'upcoming',
+                    items: [
+                      'Automated content detection',
+                      'Enhanced anti-gaming protections',
+                      'Performance-based tier system',
+                    ],
+                  },
+                  {
+                    phase: 'Scale',
+                    status: 'upcoming',
+                    items: [
+                      'Multi-platform support',
+                      'Advanced creator analytics',
+                      'Community governance',
+                    ],
+                  },
+                ].map((phase, index) => (
+                  <motion.div
+                    key={phase.phase}
+                    initial={{ opacity: 0, x: -10 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, delay: index * 0.1 }}
+                    className="relative pl-8"
+                  >
+                    {/* Dot */}
+                    <div
+                      className={`absolute left-0 top-1 w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center ${
+                        phase.status === 'active'
+                          ? 'border-emerald-500 bg-emerald-500/20'
+                          : 'border-white/20 bg-white/5'
+                      }`}
+                    >
+                      {phase.status === 'active' && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      )}
+                    </div>
 
-              {/* Phase 3 */}
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-2 h-2 rounded-full bg-muted" />
-                  <h3 className="font-display text-lg text-foreground">Scale</h3>
-                </div>
-                <div className="ml-5 pl-4 border-l border-border space-y-2 text-sm text-muted">
-                  <p>Multi-platform content support</p>
-                  <p>Advanced creator analytics</p>
-                  <p>Community governance mechanisms</p>
-                  <p>Protocol sustainability features</p>
-                </div>
+                    <h3 className="font-display text-heading-md text-foreground mb-3">
+                      {phase.phase}
+                      {phase.status === 'active' && (
+                        <span className="ml-2 text-caption text-emerald-400 font-normal">
+                          Current
+                        </span>
+                      )}
+                    </h3>
+                    <ul className="space-y-2">
+                      {phase.items.map((item, i) => (
+                        <li
+                          key={i}
+                          className="text-body-sm text-text-secondary flex items-start gap-2"
+                        >
+                          <span
+                            className={`w-1 h-1 rounded-full mt-2 flex-shrink-0 ${
+                              phase.status === 'active'
+                                ? 'bg-emerald-500/50'
+                                : 'bg-white/20'
+                            }`}
+                          />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                ))}
               </div>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Recent Activity */}
-      {recentActivity.length > 0 && (
-        <section className="py-20 sm:py-28 px-4 border-t border-border">
-          <div className="max-w-4xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-            >
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="font-display text-2xl sm:text-3xl text-foreground">
-                  Recent Payouts
-                </h2>
-                <Link href="/leaderboard" className="text-sm text-muted hover:text-foreground transition-colors">
-                  View All
-                </Link>
-              </div>
-
-              <div className="space-y-0">
-                {recentActivity.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between py-4 border-b border-border last:border-0"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-foreground">@{item.username}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-mono text-foreground">{item.amount.toFixed(3)} SOL</span>
-                      <span className="text-sm text-muted">{item.time ? timeAgo(item.time) : ''}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        </section>
-      )}
-
-      {/* CTA Section */}
-      <section className="py-20 sm:py-28 px-4 border-t border-border">
-        <div className="max-w-2xl mx-auto text-center">
+      {/* ============================================ */}
+      {/* FINAL CTA                                    */}
+      {/* ============================================ */}
+      <section className="relative py-20 sm:py-28 px-4 border-t border-white/[0.04] z-10">
+        <div className="max-w-xl mx-auto text-center">
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
           >
-            <h2 className="font-display text-2xl sm:text-3xl text-foreground mb-4">
+            <h2 className="font-display text-display-sm sm:text-display-md text-foreground mb-4">
               Start Earning
             </h2>
-            <p className="text-muted mb-8">
+            <p className="text-body-md text-text-secondary mb-8">
               Connect your wallet and link your X account to begin.
             </p>
 
             {connected ? (
-              <Link href="/dashboard" className="btn-primary inline-flex items-center gap-2">
+              <Link
+                href="/dashboard"
+                className="btn-primary inline-flex items-center gap-2"
+              >
                 Go to Dashboard
                 <ArrowRight className="w-4 h-4" />
               </Link>
@@ -401,22 +517,28 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-border py-12 px-4">
-        <div className="max-w-4xl mx-auto">
+      {/* ============================================ */}
+      {/* FOOTER                                       */}
+      {/* ============================================ */}
+      <footer className="relative border-t border-white/[0.04] py-12 px-4 z-10">
+        <div className="max-w-3xl mx-auto">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
             {/* Logo */}
-            <div className="flex items-center gap-2">
-              <Logo className="w-5 h-5 text-foreground" />
-              <span className="font-display text-sm text-foreground">ATTENTION</span>
-            </div>
+            <Link href="/" className="flex items-center gap-2">
+              <Logo className="w-5 h-5 text-emerald-500" />
+              <span className="font-display text-body-sm text-foreground">
+                ATTENTION
+              </span>
+            </Link>
 
             {/* Contract */}
             <div className="flex items-center gap-3">
-              <code className="text-sm text-muted font-mono">{truncateWallet(CONTRACT_ADDRESS, 6)}</code>
+              <code className="text-body-sm text-text-tertiary font-mono">
+                {truncateWallet(CONTRACT_ADDRESS, 6)}
+              </code>
               <button
                 onClick={copyCA}
-                className="p-2 rounded-lg text-muted hover:text-foreground transition-colors"
+                className="p-2 rounded-lg text-text-tertiary hover:text-foreground hover:bg-white/[0.03] active:bg-white/[0.05] transition-colors"
                 title="Copy contract address"
               >
                 <Copy className="w-4 h-4" />
@@ -425,7 +547,7 @@ export default function Home() {
                 href={`https://solscan.io/token/${CONTRACT_ADDRESS}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-muted hover:text-foreground transition-colors"
+                className="p-2 rounded-lg text-text-tertiary hover:text-foreground hover:bg-white/[0.03] active:bg-white/[0.05] transition-colors"
                 title="View on Solscan"
               >
                 <ExternalLink className="w-4 h-4" />

@@ -3,17 +3,32 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/* PREMIUM DESIGN SYSTEM                                                       */
-/* Infrastructure-grade, calm, authoritative                                   */
+/* ATTENTION DESIGN SYSTEM                                                     */
+/* "The Evidence" - Applause through proof, authority through transparency     */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --background: #0c0c0e;
-  --foreground: #fafaf9;
-  --surface: #121214;
-  --border: #27272a;
-  --muted: #71717a;
-  --accent: #64748b;
+  /* Base palette - deep, institutional */
+  --background: #060608;
+  --bg-secondary: #0c0c10;
+  --bg-tertiary: #121218;
+  --bg-elevated: #18181f;
+
+  /* Borders - subtle, architectural */
+  --border-subtle: #1e1e26;
+  --border: #2a2a35;
+  --border-emphasis: #3a3a48;
+
+  /* Text hierarchy */
+  --foreground: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --text-muted: #52525b;
+
+  /* Emerald accent - restrained */
+  --emerald-700: #047857;
+  --emerald-500: #10b981;
+  --emerald-400: #34d399;
 }
 
 * {
@@ -32,20 +47,25 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/* TYPOGRAPHY                                                                  */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Headlines use Inter Tight via font-display class */
-.font-display {
-  font-family: var(--font-inter-tight), system-ui, sans-serif;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  overflow-y: scroll;
 }
 
-/* Body text uses Inter via font-sans */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* TYPOGRAPHY                                                                  */
+/* Clean, confident, readable                                                  */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
 body {
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -58,30 +78,39 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #121214;
+  background: var(--bg-secondary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--border-emphasis);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg-secondary);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /* BUTTONS                                                                     */
-/* Premium, restrained button styles                                           */
+/* Weighted, confident, no gimmicks                                            */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 .btn-primary {
-  @apply bg-foreground text-background font-medium px-6 py-3 rounded-lg transition-all duration-200;
+  @apply font-medium px-6 py-3 rounded-xl transition-all duration-200;
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  color: #ffffff;
   letter-spacing: -0.01em;
 }
 
 .btn-primary:hover {
-  @apply bg-foreground-muted;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border-color: rgba(16, 185, 129, 0.25);
 }
 
 .btn-primary:active {
@@ -89,12 +118,16 @@ body {
 }
 
 .btn-secondary {
-  @apply bg-transparent border border-border text-foreground-muted font-medium px-6 py-3 rounded-lg transition-all duration-200;
+  @apply bg-transparent font-medium px-6 py-3 rounded-xl transition-all duration-200;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
   letter-spacing: -0.01em;
 }
 
 .btn-secondary:hover {
-  @apply bg-surface border-border-light text-foreground;
+  background: var(--bg-tertiary);
+  border-color: var(--border-emphasis);
+  color: var(--foreground);
 }
 
 .btn-secondary:active {
@@ -106,48 +139,60 @@ body {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 .input-dark {
-  @apply bg-surface border border-border rounded-lg px-4 py-3 text-foreground placeholder-muted focus:outline-none transition-all duration-200;
+  @apply rounded-xl px-4 py-3 transition-all duration-200;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.input-dark::placeholder {
+  color: var(--text-muted);
 }
 
 .input-dark:focus {
-  @apply border-border-light;
+  outline: none;
+  border-color: var(--emerald-700);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /* CARDS                                                                       */
+/* Architectural, weighted                                                     */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 .card {
-  @apply bg-surface border border-border rounded-xl;
+  @apply rounded-2xl;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .card-hover {
-  @apply transition-colors duration-200;
+  @apply transition-all duration-200;
 }
 
 .card-hover:hover {
-  @apply border-border-light;
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /* SOLANA WALLET ADAPTER OVERRIDES                                             */
-/* Premium, understated styling                                                */
+/* Match the architectural style                                               */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 .wallet-adapter-button {
-  background: #fafaf9 !important;
-  color: #0c0c0e !important;
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%) !important;
+  color: #ffffff !important;
   font-weight: 500 !important;
-  border-radius: 8px !important;
-  padding: 12px 20px !important;
+  border-radius: 12px !important;
+  padding: 12px 24px !important;
   font-size: 14px !important;
   transition: all 0.2s ease !important;
   letter-spacing: -0.01em !important;
-  font-family: var(--font-inter), system-ui, sans-serif !important;
+  font-family: var(--font-geist-sans), system-ui, sans-serif !important;
+  border: 1px solid rgba(16, 185, 129, 0.15) !important;
 }
 
 .wallet-adapter-button:hover {
-  background: #e7e5e4 !important;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
 }
 
 .wallet-adapter-button:active {
@@ -155,105 +200,53 @@ body {
 }
 
 .wallet-adapter-modal-wrapper {
-  background: rgba(12, 12, 14, 0.95) !important;
+  background: rgba(6, 6, 8, 0.95) !important;
   backdrop-filter: blur(8px) !important;
 }
 
 .wallet-adapter-modal-container {
-  background: #121214 !important;
-  border: 1px solid #27272a !important;
-  border-radius: 12px !important;
+  background: var(--bg-secondary) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 16px !important;
 }
 
 .wallet-adapter-modal-title {
-  color: #fafaf9 !important;
+  color: var(--foreground) !important;
   font-weight: 600 !important;
-  font-family: var(--font-inter-tight), system-ui, sans-serif !important;
+  font-family: var(--font-geist-sans), system-ui, sans-serif !important;
 }
 
 .wallet-adapter-modal-list li {
-  background: #18181b !important;
-  border-radius: 8px !important;
+  background: var(--bg-tertiary) !important;
+  border-radius: 10px !important;
 }
 
 .wallet-adapter-modal-list li:hover {
-  background: #1e1e22 !important;
+  background: var(--bg-elevated) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /* UTILITY CLASSES                                                             */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Number formatting */
+/* Tabular numbers for stats */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* Live indicator pulse */
-@keyframes livePulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid var(--emerald-500);
+  outline-offset: 2px;
 }
 
-.live-pulse {
-  animation: livePulse 2s ease-in-out infinite;
-}
-
-/* Subtle hover lift */
-.hover-lift {
-  transition: transform 0.2s ease;
-}
-
-.hover-lift:hover {
-  transform: translateY(-2px);
-}
-
-/* Focus ring for accessibility */
-.focus-ring:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px #0c0c0e, 0 0 0 4px #64748b;
-}
-
-/* Fade in animation */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.5s ease forwards;
-}
-
-/* Stagger children animation */
-.stagger-children > * {
-  opacity: 0;
-  animation: fadeInUp 0.4s ease forwards;
-}
-
-.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
-.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
-.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
-.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
-.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
-.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
-
-/* Selection color */
+/* Selection */
 ::selection {
-  background: rgba(100, 116, 139, 0.3);
-  color: #fafaf9;
+  background: rgba(4, 120, 87, 0.3);
+  color: var(--foreground);
 }
 
-/* Reduced motion preference */
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -265,14 +258,13 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
-/* SECTION STYLING                                                             */
+/* CODE                                                                        */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-.section-divider {
-  @apply border-t border-border;
-}
-
-/* Premium code blocks */
 code {
-  @apply font-mono text-muted-light bg-surface px-2 py-1 rounded;
+  @apply font-mono px-2 py-1 rounded-lg;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 0.875em;
 }
