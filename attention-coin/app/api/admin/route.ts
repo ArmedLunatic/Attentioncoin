@@ -92,14 +92,34 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
         }
 
+        // Calculate final_score with DIMINISHING RETURNS formula
+        // This prevents high-engagement tweets from dominating the pool
+        // and makes the payout budget sustainable as users scale
+        const likes = actionData.engagementData?.likes || 0;
+        const reposts = actionData.engagementData?.reposts || 0;
+        const replies = actionData.engagementData?.replies || 0;
+
+        // Raw engagement (reposts still weighted 2x for reach)
+        const rawEngagement = likes + (reposts * 2) + replies;
+
+        // Logarithmic scaling: prevents runaway scores
+        // 10 engagement → 10 score
+        // 100 engagement → 20 score
+        // 1000 engagement → 30 score
+        // 10000 engagement → 40 score
+        const finalScore = rawEngagement > 0
+          ? Math.round(Math.log10(rawEngagement + 1) * 10 * 100) / 100
+          : 0;
+
         const { error } = await supabase
           .from('submissions')
           .update({
             status: 'approved',
             approved_at: new Date().toISOString(),
-            likes: actionData.engagementData?.likes || 0,
-            reposts: actionData.engagementData?.reposts || 0,
-            replies: actionData.engagementData?.replies || 0,
+            likes,
+            reposts,
+            replies,
+            final_score: finalScore,
           })
           .eq('id', actionData.submissionId);
 

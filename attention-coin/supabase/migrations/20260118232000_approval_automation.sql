@@ -31,10 +31,12 @@ BEGIN
     NEW.approved_at := NOW();
   END IF;
 
-  -- 1. Increment user's total submission count
+  -- 1. Increment user's total submission count and add earned points
+  -- Points are based on final_score (1 score = 1,000,000 lamports = 0.001 SOL)
   UPDATE users
   SET
     total_submissions = total_submissions + 1,
+    total_earned_lamports = total_earned_lamports + COALESCE(NEW.final_score, 0) * 1000000,
     updated_at = NOW()
   WHERE id = NEW.user_id;
 

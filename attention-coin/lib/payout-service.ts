@@ -394,8 +394,8 @@ export async function processPayouts(): Promise<PayoutSummary> {
       // Mark submissions as paid
       await markSubmissionsPaid(payout.submissionIds);
 
-      // Update user earnings
-      await updateUserEarnings(payout.userId, result.lamports);
+      // Note: User earnings (total_earned_lamports) are updated on approval via trigger
+      // No need to update here - avoids double-counting
 
       results.push({
         userId: payout.userId,
@@ -454,4 +454,146 @@ export async function getPendingRetries(): Promise<number> {
   }
 
   return count || 0;
+}
+
+/**
+ * Calculate eligible earnings for a specific user (preview only, no execution)
+ * Shows what a user would earn if payouts ran right now
+ */
+export async function calculateEligibleEarnings(userId: string): Promise<{
+  eligible: boolean;
+  userScore: number;
+  totalPoolScore: number;
+  sharePercentage: number;
+  estimatedSol: number;
+  maxPossibleSol: number;
+  approvedSubmissions: number;
+  dailyBudgetSol: number;
+  message: string;
+}> {
+  const supabase = createServerClient();
+  const config = await getPayoutConfig();
+
+  // Get all approved submissions for the pool calculation
+  const { data: allSubmissions, error: allError } = await supabase
+    .from('submissions')
+    .select('user_id, final_score')
+    .eq('status', 'approved')
+    .gt('final_score', 0);
+
+  if (allError) {
+    throw new Error(`Failed to fetch submissions: ${allError.message}`);
+  }
+
+  const submissions = allSubmissions || [];
+
+  // Calculate user's score and submission count
+  const userSubmissions = submissions.filter(s => s.user_id === userId);
+  const userScore = userSubmissions.reduce((sum, s) => sum + (s.final_score || 0), 0);
+  const approvedSubmissions = userSubmissions.length;
+
+  // Calculate total pool score
+  const totalPoolScore = submissions.reduce((sum, s) => sum + (s.final_score || 0), 0);
+
+  // No approved submissions in pool
+  if (totalPoolScore === 0) {
+    return {
+      eligible: false,
+      userScore: 0,
+      totalPoolScore: 0,
+      sharePercentage: 0,
+      estimatedSol: 0,
+      maxPossibleSol: config.maxPerUserSol,
+      approvedSubmissions: 0,
+      dailyBudgetSol: config.dailyBudgetSol,
+      message: 'No approved submissions in the payout pool yet.',
+    };
+  }
+
+  // User has no approved submissions
+  if (userScore === 0) {
+    return {
+      eligible: false,
+      userScore: 0,
+      totalPoolScore,
+      sharePercentage: 0,
+      estimatedSol: 0,
+      maxPossibleSol: config.maxPerUserSol,
+      approvedSubmissions: 0,
+      dailyBudgetSol: config.dailyBudgetSol,
+      message: 'You have no approved submissions in the current payout pool.',
+    };
+  }
+
+  // Calculate proportional share
+  const sharePercentage = (userScore / totalPoolScore) * 100;
+  let estimatedSol = (userScore / totalPoolScore) * config.dailyBudgetSol;
+
+  // Apply max cap
+  const cappedAtMax = estimatedSol > config.maxPerUserSol;
+  if (cappedAtMax) {
+    estimatedSol = config.maxPerUserSol;
+  }
+
+  // Check minimum threshold
+  const belowMinimum = estimatedSol < config.minPayoutSol;
+
+  let message = '';
+  if (cappedAtMax) {
+    message = `You've hit the daily max of ${config.maxPerUserSol} SOL! Great engagement!`;
+  } else if (belowMinimum) {
+    message = `Below minimum payout (${config.minPayoutSol} SOL). Get more engagement to qualify!`;
+  } else {
+    message = `Based on your ${sharePercentage.toFixed(1)}% share of today's pool.`;
+  }
+
+  return {
+    eligible: !belowMinimum,
+    userScore,
+    totalPoolScore,
+    sharePercentage,
+    estimatedSol: belowMinimum ? 0 : estimatedSol,
+    maxPossibleSol: config.maxPerUserSol,
+    approvedSubmissions,
+    dailyBudgetSol: config.dailyBudgetSol,
+    message,
+  };
+}
+
+/**
+ * Get pool statistics (for displaying to all users)
+ */
+export async function getPoolStats(): Promise<{
+  totalPoolScore: number;
+  totalParticipants: number;
+  dailyBudgetSol: number;
+  nextPayoutTime: string;
+}> {
+  const supabase = createServerClient();
+  const config = await getPayoutConfig();
+
+  const { data: submissions } = await supabase
+    .from('submissions')
+    .select('user_id, final_score')
+    .eq('status', 'approved')
+    .gt('final_score', 0);
+
+  const allSubmissions = submissions || [];
+  const totalPoolScore = allSubmissions.reduce((sum, s) => sum + (s.final_score || 0), 0);
+
+  // Count unique participants
+  const uniqueUsers = new Set(allSubmissions.map(s => s.user_id));
+
+  // Calculate next payout time (midnight UTC)
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  tomorrow.setUTCHours(0, 0, 0, 0);
+
+  return {
+    totalPoolScore,
+    totalParticipants: uniqueUsers.size,
+    dailyBudgetSol: config.dailyBudgetSol,
+    nextPayoutTime: tomorrow.toISOString(),
+  };
 }
