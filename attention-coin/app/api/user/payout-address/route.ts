@@ -63,17 +63,17 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/user/payout-address
  * Save or update the user's payout address
- * Body: { user_id: string, payout_address: string }
+ * Body: { x_username: string, payout_address: string }
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, payout_address } = body;
+    const { x_username, payout_address } = body;
 
     // Validate required fields
-    if (!user_id) {
+    if (!x_username) {
       return NextResponse.json(
-        { error: 'User ID is required' },
+        { error: 'X username is required' },
         { status: 400 }
       );
     }
@@ -95,11 +95,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerClient();
 
-    // Get user by ID
+    // Get user by X username
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('id')
-      .eq('id', user_id)
+      .eq('x_username', x_username)
       .single();
 
     if (userError || !user) {
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     const { error: updateError } = await supabase
       .from('users')
       .update({ payout_address })
-      .eq('id', user_id);
+      .eq('x_username', x_username);
 
     if (updateError) {
       console.error('[Payout Address API] Update error:', updateError);

@@ -19,13 +19,13 @@ export default function ClaimAddress() {
       // Validate Solana address
       new PublicKey(address);
 
-      console.log('Setting payout address:', { userId: user.id, address });
+      console.log('Setting payout address:', { x_username: user.x_username, address });
 
       const res = await fetch('/api/user/payout-address', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          user_id: user.id,
+          x_username: user.x_username,
           payout_address: address 
         }),
       });
