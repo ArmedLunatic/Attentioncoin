@@ -19,18 +19,13 @@ export default function ClaimAddress() {
       // Validate Solana address
       new PublicKey(address);
 
-      if (!user?.x_username) {
-        console.error('Missing X username for user:', user);
-        throw new Error('Please verify your X account first before setting a payout address');
-      }
-
-      console.log('Setting payout address:', { username: user.x_username, address });
+      console.log('Setting payout address:', { userId: user.id, address });
 
       const res = await fetch('/api/user/payout-address', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          username: user.x_username,
+          user_id: user.id,
           payout_address: address 
         }),
       });
@@ -49,7 +44,7 @@ export default function ClaimAddress() {
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 mt-6">
+    <div className="rounded-xl border border-border bg-secondary p-4 mt-6">
       <h3 className="font-semibold text-foreground mb-2">Payout Address</h3>
       <p className="text-sm text-muted mb-3">
         Enter the Solana address where rewards will be sent.
@@ -61,7 +56,7 @@ export default function ClaimAddress() {
           placeholder="Solana address"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          className="input flex-1"
+          className="input-dark flex-1"
         />
         <button
           onClick={saveAddress}

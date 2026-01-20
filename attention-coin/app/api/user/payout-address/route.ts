@@ -63,17 +63,17 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/user/payout-address
  * Save or update the user's payout address
- * Body: { username: string, payout_address: string }
+ * Body: { user_id: string, payout_address: string }
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, payout_address } = body;
+    const { user_id, payout_address } = body;
 
     // Validate required fields
-    if (!username) {
+    if (!user_id) {
       return NextResponse.json(
-        { error: 'Username is required' },
+        { error: 'User ID is required' },
         { status: 400 }
       );
     }
@@ -95,25 +95,17 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerClient();
 
-    // Get user by X username
+    // Get user by ID
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('id, x_verified_at')
-      .eq('x_username', username)
+      .select('id')
+      .eq('id', user_id)
       .single();
 
     if (userError || !user) {
       return NextResponse.json(
-        { error: 'User not found. Please verify your X account first.' },
+        { error: 'User not found.' },
         { status: 404 }
-      );
-    }
-
-    // Ensure user has verified their X account
-    if (!user.x_verified_at) {
-      return NextResponse.json(
-        { error: 'Please verify your X account before setting a payout address.' },
-        { status: 403 }
       );
     }
 
@@ -121,7 +113,7 @@ export async function POST(request: NextRequest) {
     const { error: updateError } = await supabase
       .from('users')
       .update({ payout_address })
-      .eq('id', user.id);
+      .eq('id', user_id);
 
     if (updateError) {
       console.error('[Payout Address API] Update error:', updateError);
