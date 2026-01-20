@@ -13,6 +13,7 @@ export default function AdminPage() {
     totalPaid: 0,
     pendingApproval: 0,
     pendingPayment: 0,
+    fundingBalance: 0,
   });
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [tab, setTab] = useState('dashboard');
@@ -26,6 +27,7 @@ export default function AdminPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [customPayoutAmount, setCustomPayoutAmount] = useState<string>('');
 
   // Store password in session for subsequent API calls
   const [storedPassword, setStoredPassword] = useState<string | null>(null);
@@ -162,6 +164,37 @@ export default function AdminPage() {
     }
   }
 
+  async function executePayout(submissionId: string, amount?: number) {
+    try {
+      setActionLoading(submissionId);
+      setError(null);
+
+      const result = await callAdminApi('executePayout', { 
+        submissionId,
+        payoutAmount: amount 
+      });
+
+      if (result.success) {
+        // Show success details
+        const { data } = result;
+        const successMessage = `Paid ${data.amount} SOL to @${data.username}\nTX: ${data.signature.slice(0, 8)}...${data.signature.slice(-8)}`;
+        
+        // Update the data to reflect the payment
+        await loadData();
+        
+        // Open explorer in new tab for verification
+        if (data.explorerUrl) {
+          window.open(data.explorerUrl, '_blank');
+        }
+      }
+    } catch (err: any) {
+      console.error('Error executing payout:', err);
+      setError(err.message || 'Failed to execute payout');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function markAsPaid(submissionId: string) {
     try {
       setActionLoading(submissionId);
@@ -265,7 +298,7 @@ export default function AdminPage() {
         )}
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-surface/80 border border-border rounded-2xl p-5 sm:p-6 hover:border-border-light transition-all duration-200">
             <p className="text-muted text-sm mb-1">Total Users</p>
             <p className="text-2xl sm:text-3xl font-bold">{stats.totalUsers}</p>
@@ -277,6 +310,12 @@ export default function AdminPage() {
           <div className="bg-surface/80 border border-border rounded-2xl p-5 sm:p-6 hover:border-border-light transition-all duration-200">
             <p className="text-muted text-sm mb-1">Pending Approval</p>
             <p className="text-2xl sm:text-3xl font-bold text-yellow-400">{stats.pendingApproval}</p>
+          </div>
+          <div className="bg-surface/80 border border-border rounded-2xl p-5 sm:p-6 hover:border-border-light transition-all duration-200">
+            <p className="text-muted text-sm mb-1">Funding Balance</p>
+            <p className="text-2xl sm:text-3xl font-bold text-green-400">
+              {(stats.fundingBalance / 1000000000).toFixed(2)} SOL
+            </p>
           </div>
         </div>
 
@@ -471,43 +510,95 @@ export default function AdminPage() {
         {/* Payout Tab */}
         {tab === 'payout' && (
           <div className="bg-surface/80 border border-border rounded-2xl p-6 sm:p-8">
-            <h3 className="text-lg font-semibold mb-6">Pending Payments</h3>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Approved Payouts</h3>
+              <div className="text-sm text-muted">
+                Click "Pay" to send SOL instantly
+              </div>
+            </div>
+            
             <div className="space-y-3">
               {submissions
                 .filter((s) => s.status === 'approved')
-                .map((submission) => (
-                  <div
-                    key={submission.id}
-                    className="flex justify-between items-center bg-surface-light/50 p-4 rounded-xl border border-border"
-                  >
-                    <div>
-                      <p className="font-medium">@{submission.users?.x_username || 'Unknown'}</p>
-                      <p className="text-muted text-sm mt-0.5">
-                        {((submission.users?.total_earned_lamports || 0) / 1000000000).toFixed(4)} SOL earned
-                      </p>
-                      {submission.users?.payout_address && (
-                        <p className="text-xs text-muted mt-1">
-                          Payout: {submission.users.payout_address.slice(0, 6)}...{submission.users.payout_address.slice(-4)}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => markAsPaid(submission.id)}
-                      disabled={actionLoading === submission.id}
-                      className="bg-primary hover:bg-primary-light disabled:bg-primary-dim disabled:cursor-not-allowed text-black px-4 py-2.5 rounded-xl transition-colors font-medium flex items-center gap-2"
+                .map((submission) => {
+                  const calculatedAmount = ((submission.final_score || 0) * 1000000) / 1000000000; // Convert score to SOL
+                  const displayAmount = customPayoutAmount || calculatedAmount.toFixed(4);
+                  
+                  return (
+                    <div
+                      key={submission.id}
+                      className="bg-surface-light/50 p-4 rounded-xl border border-border"
                     >
-                      {actionLoading === submission.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        'Mark Paid'
-                      )}
-                    </button>
-                  </div>
-                ))}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <p className="font-medium">@{submission.users?.x_username || 'Unknown'}</p>
+                            <span className="bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full font-medium">
+                              Approved
+                            </span>
+                          </div>
+                          <p className="text-muted text-sm">
+                            Score: {submission.final_score || 0} → Est: {calculatedAmount.toFixed(4)} SOL
+                          </p>
+                          {submission.users?.payout_address && (
+                            <p className="text-xs text-muted mt-1">
+                              Payout: {submission.users.payout_address.slice(0, 6)}...{submission.users.payout_address.slice(-4)}
+                            </p>
+                          )}
+                        </div>
+                        
+                        <div className="flex flex-col justify-between">
+                          <div>
+                            <label className="text-xs text-muted mb-1 block">Custom Amount (SOL)</label>
+                            <input
+                              type="number"
+                              step="0.001"
+                              min="0.001"
+                              max="10"
+                              placeholder={calculatedAmount.toFixed(4)}
+                              value={customPayoutAmount}
+                              onChange={(e) => setCustomPayoutAmount(e.target.value)}
+                              className="input-dark text-sm"
+                            />
+                          </div>
+                          
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              onClick={() => executePayout(submission.id, parseFloat(displayAmount))}
+                              disabled={actionLoading === submission.id || parseFloat(displayAmount) <= 0}
+                              className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                            >
+                              {actionLoading === submission.id ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Paying...
+                                </>
+                              ) : (
+                                <>
+                                  Pay {displayAmount} SOL
+                                </>
+                              )}
+                            </button>
+                            
+                            <button
+                              onClick={() => markAsPaid(submission.id)}
+                              disabled={actionLoading === submission.id}
+                              className="bg-surface border border-border hover:border-border-light text-muted px-3 py-2 rounded-xl transition-colors font-medium"
+                              title="Mark as paid without sending SOL"
+                            >
+                              Skip
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               {submissions.filter((s) => s.status === 'approved').length === 0 && (
                 <div className="text-center py-16 bg-surface/50 rounded-2xl border border-border border-dashed">
                   <CheckCircle className="w-10 h-10 text-muted mx-auto mb-3" />
-                  <p className="text-muted">No pending payments</p>
+                  <p className="text-muted">No approved payouts</p>
+                  <p className="text-muted text-sm mt-2">Approve submissions first to enable payouts</p>
                 </div>
               )}
             </div>
