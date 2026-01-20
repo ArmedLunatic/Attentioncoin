@@ -2,10 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useUser } from './WalletProvider';
-import { isAdminWallet } from '@/lib/utils';
 import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 
@@ -28,22 +25,19 @@ function Logo({ className = '' }: { className?: string }) {
 
 export default function Header() {
   const pathname = usePathname();
-  const { publicKey, connected } = useWallet();
-  const { user } = useUser();
+  const { user, isAuthenticated, logout } = useUser();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const isAdmin = isAdminWallet(publicKey?.toBase58() || null);
 
   const navItems = [
     { href: '/', label: 'Home' },
     { href: '/dashboard', label: 'Dashboard', requiresAuth: true },
     { href: '/payouts', label: 'Payouts', requiresAuth: true },
     { href: '/leaderboard', label: 'Leaderboard' },
-    ...(isAdmin ? [{ href: '/admin', label: 'Admin', requiresAuth: true }] : []),
-  ];
+   ];
 
   const visibleNavItems = navItems.filter(
-    item => !item.requiresAuth || connected
+   item => !item.requiresAuth || isAuthenticated
+
   );
 
   return (
@@ -77,13 +71,30 @@ export default function Header() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            {connected && user?.x_username && (
-              <div className="hidden sm:block text-body-sm text-text-tertiary">
-                @{user.x_username}
-              </div>
-            )}
+           {isAuthenticated && user?.x_username && (
+  <div className="hidden sm:block text-body-sm text-text-tertiary">
+    @{user.x_username}
+  </div>
+)}
+          {isAuthenticated ? (
+  <div className="flex items-center gap-3">
+    <span className="text-sm text-muted">@{user?.x_username}</span>
+    <button
+      onClick={logout}
+      className="px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-surface-light"
+    >
+      Logout
+    </button>
+  </div>
+) : (
+  <Link
+    href="/login"
+    className="px-4 py-2 rounded-lg bg-foreground text-background text-sm font-medium"
+  >
+    Get Started
+  </Link>
+)}
 
-            <WalletMultiButton />
 
             {/* Mobile menu button */}
             <button
