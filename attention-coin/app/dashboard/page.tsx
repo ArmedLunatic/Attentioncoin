@@ -665,6 +665,30 @@ export default function DashboardPage() {
           <ClaimAddress />
         </div>
 
+        {/* How Earnings Are Calculated */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 sm:mb-8 p-5 sm:p-6 rounded-2xl bg-surface/80 border border-border"
+        >
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+              <Info className="w-4 h-4 text-blue-400" />
+            </div>
+            How Earnings Are Calculated
+          </h3>
+          <div className="space-y-3 text-sm text-muted">
+            <p><span className="text-white font-medium">Core rule:</span> Users earn SOL based on engagement-weighted tweet scores.</p>
+            <p><span className="text-white font-medium">What counts:</span> Likes, reposts, replies, relevance (cashtag / contract address).</p>
+            <p><span className="text-white font-medium">Pool logic:</span> User payout = (user score ÷ total score) × payout pool.</p>
+            <div className="p-3 rounded-lg bg-surface-light border border-border text-xs">
+              <span className="text-white">Example:</span> If your score is 50 out of 500 total, and the pool is 1 SOL, you earn 0.1 SOL (50/500 × 1).
+            </div>
+            <p><span className="text-white font-medium">Trust:</span> Trust score improves approvals and future weighting.</p>
+            <p><span className="text-white font-medium">Payouts:</span> Automatic at cycle end to your saved Solana address.</p>
+          </div>
+        </motion.div>
+
         {/* Eligible Earnings */}
         <div className="mb-6 sm:mb-8">
           <EligibleEarnings />

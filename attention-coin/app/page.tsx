@@ -274,18 +274,18 @@ export default function Home() {
               {[
                 {
                   step: '01',
-                  title: 'Verify',
-                  description: 'Verify your X account and add your Solana address.',
+                  title: 'Post',
+                  description: `Tweet with ${CASHTAG} or the contract address.`,
                 },
                 {
                   step: '02',
-                  title: 'Create',
-                  description: `Post quality content about ${CASHTAG} on X.`,
+                  title: 'Get Approved',
+                  description: 'Quality + engagement review by our team.',
                 },
                 {
                   step: '03',
-                  title: 'Earn',
-                  description: 'Receive SOL based on your engagement metrics.',
+                  title: 'Earn SOL',
+                  description: 'Fair, engagement-weighted split from the payout pool.',
                 },
               ].map((item, i) => (
                 <motion.div
