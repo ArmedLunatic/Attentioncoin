@@ -4,43 +4,91 @@ import { generateVerificationCode } from '@/lib/utils';
 
 /**
  * POST /api/verify-x - Generate verification code
- * Stores the code in the database with expiration
+ * For new users who want to verify their X account
+ * Body: { username: string }
  */
 export async function POST(request: NextRequest) {
   console.log('[verify-x] POST request received');
 
   try {
     const body = await request.json();
-    const { wallet } = body;
-    console.log('[verify-x] Wallet:', wallet);
+    const { username } = body;
+    console.log('[verify-x] Username:', username);
 
     // Validate required fields
-    if (!wallet) {
+    if (!username) {
       return NextResponse.json(
-        { error: 'Missing wallet address' },
+        { error: 'Missing username' },
+        { status: 400 }
+      );
+    }
+
+    // Clean the username
+    const cleanUsername = username.replace('@', '').trim();
+    if (!cleanUsername || cleanUsername.length < 1 || cleanUsername.length > 50) {
+      return NextResponse.json(
+        { error: 'Invalid username format' },
         { status: 400 }
       );
     }
 
     const supabase = createServerClient();
 
-    // Get or create user
-    let { data: user, error: userError } = await supabase
+    // Check if username is already taken
+    let { data: existingUser, error: existingError } = await supabase
       .from('users')
       .select('id, x_verified_at')
-      .eq('wallet_address', wallet)
+      .eq('x_username', cleanUsername)
       .single();
 
-    console.log('[verify-x] User lookup result:', { user, error: userError?.message });
+    console.log('[verify-x] Existing user lookup:', { existingUser, error: existingError?.message });
 
-    if (userError && userError.code === 'PGRST116') {
-      // User doesn't exist, create one
-      console.log('[verify-x] Creating new user...');
-      const { data: newUser, error: createError } = await supabase
+    if (existingUser) {
+      // User with this X username already exists
+      if (existingUser.x_verified_at) {
+        return NextResponse.json(
+          { error: 'This X username is already verified. Please login instead.' },
+          { status: 400 }
+        );
+      }
+      // User exists but not verified - generate new code
+    }
+
+    // Generate verification code
+    const code = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    console.log('[verify-x] Generated code:', code);
+
+    if (existingUser) {
+      // Update existing user with new verification code
+      const { error: updateError } = await supabase
         .from('users')
-        .insert({ wallet_address: wallet })
-        .select('id, x_verified_at')
-        .single();
+        .update({
+          verification_code: code,
+          verification_expires: expiresAt.toISOString(),
+        })
+        .eq('id', existingUser.id);
+
+      if (updateError) {
+        console.error('[verify-x] Error updating verification code:', updateError);
+        return NextResponse.json(
+          { error: `Failed to generate verification code: ${updateError.message}` },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Create new user with the X username and verification code
+      // Use a placeholder wallet_address since we no longer require it
+      const placeholderWallet = `x_${cleanUsername}_${Date.now()}`;
+
+      const { error: createError } = await supabase
+        .from('users')
+        .insert({
+          wallet_address: placeholderWallet, // Placeholder - will be replaced by payout_address
+          x_username: cleanUsername,
+          verification_code: code,
+          verification_expires: expiresAt.toISOString(),
+        });
 
       if (createError) {
         console.error('[verify-x] Error creating user:', createError);
@@ -49,44 +97,6 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      console.log('[verify-x] User created:', newUser);
-      user = newUser;
-    } else if (userError) {
-      console.error('[verify-x] Error fetching user:', userError);
-      return NextResponse.json(
-        { error: `Failed to fetch user: ${userError.message}` },
-        { status: 500 }
-      );
-    }
-
-    // Check if already verified
-    if (user?.x_verified_at) {
-      return NextResponse.json(
-        { error: 'X account already verified' },
-        { status: 400 }
-      );
-    }
-
-    // Generate verification code
-    const code = generateVerificationCode();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    console.log('[verify-x] Generated code:', code);
-
-    // Store code in database
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        verification_code: code,
-        verification_expires: expiresAt.toISOString(),
-      })
-      .eq('id', user?.id);
-
-    if (updateError) {
-      console.error('[verify-x] Error storing verification code:', updateError);
-      return NextResponse.json(
-        { error: `Failed to store verification code: ${updateError.message}` },
-        { status: 500 }
-      );
     }
 
     console.log('[verify-x] Code stored successfully');
@@ -95,6 +105,7 @@ export async function POST(request: NextRequest) {
       data: {
         code,
         expiresAt: expiresAt.toISOString(),
+        username: cleanUsername,
       },
     });
   } catch (error) {
@@ -107,18 +118,19 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * PUT /api/verify-x - Confirm verification with username
- * Validates the code hasn't expired and marks user as verified
+ * PUT /api/verify-x - Confirm verification
+ * Marks the user as verified after they've posted the verification tweet
+ * Body: { username: string }
  */
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { wallet, username } = body;
+    const { username } = body;
 
     // Validate required fields
-    if (!wallet || !username) {
+    if (!username) {
       return NextResponse.json(
-        { error: 'Missing required fields: wallet, username' },
+        { error: 'Missing username' },
         { status: 400 }
       );
     }
@@ -138,7 +150,7 @@ export async function PUT(request: NextRequest) {
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('id, verification_code, verification_expires, x_verified_at')
-      .eq('wallet_address', wallet)
+      .eq('x_username', cleanUsername)
       .single();
 
     if (userError || !user) {
@@ -172,26 +184,10 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Check if username is already taken by another user
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('x_username', cleanUsername)
-      .neq('id', user.id)
-      .single();
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'This X username is already linked to another wallet' },
-        { status: 400 }
-      );
-    }
-
     // Mark user as verified
     const { error: updateError } = await supabase
       .from('users')
       .update({
-        x_username: cleanUsername,
         x_verified_at: new Date().toISOString(),
         verification_code: null, // Clear the code after use
         verification_expires: null,

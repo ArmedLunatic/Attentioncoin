@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import nacl from 'tweetnacl';
-import bs58 from 'bs58';
+import { timingSafeEqual } from 'crypto';
 
-const ADMIN_WALLET = process.env.ADMIN_WALLET;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
-if (!ADMIN_WALLET) {
-  console.error('ADMIN_WALLET environment variable is not set');
+if (!ADMIN_PASSWORD) {
+  console.error('ADMIN_PASSWORD environment variable is not set');
 }
 
 interface AdminAction {
@@ -20,29 +19,34 @@ interface AdminAction {
   rejectionReason?: string;
 }
 
-function verifySignature(message: string, signature: string, publicKey: string): boolean {
+/**
+ * Timing-safe password comparison to prevent timing attacks
+ */
+function verifyPassword(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+
   try {
-    const messageBytes = new TextEncoder().encode(message);
-    const signatureBytes = bs58.decode(signature);
-    const publicKeyBytes = bs58.decode(publicKey);
-    return nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
-  } catch (error) {
-    console.error('Signature verification error:', error);
+    const providedBuffer = Buffer.from(provided);
+    const expectedBuffer = Buffer.from(expected);
+
+    // If lengths differ, still compare to prevent timing leaks
+    if (providedBuffer.length !== expectedBuffer.length) {
+      // Compare with expected to burn time, but return false
+      timingSafeEqual(expectedBuffer, expectedBuffer);
+      return false;
+    }
+
+    return timingSafeEqual(providedBuffer, expectedBuffer);
+  } catch {
     return false;
   }
-}
-
-function isAdmin(wallet: string): boolean {
-  return wallet === ADMIN_WALLET;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { wallet, signature, timestamp, ...actionData } = body as {
-      wallet: string;
-      signature: string;
-      timestamp: number;
+    const { password, ...actionData } = body as {
+      password: string;
       action: AdminAction['action'];
       submissionId?: string;
       engagementData?: AdminAction['engagementData'];
@@ -50,36 +54,18 @@ export async function POST(request: NextRequest) {
     };
 
     // Validate required fields
-    if (!wallet || !signature || !timestamp) {
+    if (!password) {
       return NextResponse.json(
-        { error: 'Missing authentication fields' },
+        { error: 'Missing password' },
         { status: 400 }
       );
     }
 
-    // Check timestamp is within 5 minutes (prevent replay attacks)
-    const now = Date.now();
-    if (Math.abs(now - timestamp) > 5 * 60 * 1000) {
+    // Verify the password
+    if (!ADMIN_PASSWORD || !verifyPassword(password, ADMIN_PASSWORD)) {
       return NextResponse.json(
-        { error: 'Request expired' },
-        { status: 401 }
-      );
-    }
-
-    // Verify the wallet is admin
-    if (!isAdmin(wallet)) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Not an admin wallet' },
+        { error: 'Unauthorized: Invalid password' },
         { status: 403 }
-      );
-    }
-
-    // Verify the signature
-    const message = `admin:${actionData.action}:${timestamp}`;
-    if (!verifySignature(message, signature, wallet)) {
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 401 }
       );
     }
 
@@ -93,8 +79,6 @@ export async function POST(request: NextRequest) {
         }
 
         // Calculate final_score with DIMINISHING RETURNS formula
-        // This prevents high-engagement tweets from dominating the pool
-        // and makes the payout budget sustainable as users scale
         const likes = actionData.engagementData?.likes || 0;
         const reposts = actionData.engagementData?.reposts || 0;
         const replies = actionData.engagementData?.replies || 0;
@@ -103,10 +87,6 @@ export async function POST(request: NextRequest) {
         const rawEngagement = likes + (reposts * 2) + replies;
 
         // Logarithmic scaling: prevents runaway scores
-        // 10 engagement → 10 score
-        // 100 engagement → 20 score
-        // 1000 engagement → 30 score
-        // 10000 engagement → 40 score
         const finalScore = rawEngagement > 0
           ? Math.round(Math.log10(rawEngagement + 1) * 10 * 100) / 100
           : 0;
@@ -174,7 +154,7 @@ export async function POST(request: NextRequest) {
         // Get submissions with user data
         const { data: submissionsData } = await supabase
           .from('submissions')
-          .select('*, users(wallet_address, x_username, total_earned_lamports)')
+          .select('*, users(wallet_address, x_username, total_earned_lamports, payout_address)')
           .order('created_at', { ascending: false });
 
         // Get users count

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { motion } from 'framer-motion';
 import { Trophy, Medal, TrendingUp, RefreshCw, Crown } from 'lucide-react';
+import { useUser } from '@/components/WalletProvider';
 import { getLeaderboard, supabase } from '@/lib/supabase';
 import { formatNumber, truncateWallet } from '@/lib/utils';
 import type { LeaderboardEntry } from '@/types';
@@ -16,8 +16,8 @@ const periods = [
 ] as const;
 
 function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: number }) {
-  const { publicKey } = useWallet();
-  const isCurrentUser = publicKey?.toBase58() === entry.wallet_address;
+  const { user } = useUser();
+  const isCurrentUser = user?.x_username === entry.x_username;
 
   const rankColors: Record<number, string> = {
     1: 'text-yellow-400',
@@ -102,7 +102,7 @@ function LeaderboardRow({ entry, index }: { entry: LeaderboardEntry; index: numb
 }
 
 export default function LeaderboardPage() {
-  const { publicKey } = useWallet();
+  const { user, isAuthenticated } = useUser();
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'all'>('week');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,9 +114,9 @@ export default function LeaderboardPage() {
       const data = await getLeaderboard(period, 50);
       setLeaderboard(data);
 
-      // Find current user's rank
-      if (publicKey) {
-        const userEntry = data.find(e => e.wallet_address === publicKey.toBase58());
+      // Find current user's rank by X username
+      if (user?.x_username) {
+        const userEntry = data.find(e => e.x_username === user.x_username);
         setUserRank(userEntry?.rank || null);
       }
     } catch (error) {
@@ -124,7 +124,7 @@ export default function LeaderboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [period, publicKey]);
+  }, [period, user?.x_username]);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -194,7 +194,7 @@ export default function LeaderboardPage() {
         </div>
 
         {/* User's Rank Card */}
-        {publicKey && userRank && (
+        {isAuthenticated && userRank && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

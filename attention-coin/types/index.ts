@@ -2,6 +2,7 @@
 export interface User {
   id: string;
   wallet_address: string;
+  payout_address: string | null;
   x_username: string | null;
   x_user_id: string | null;
   x_display_name: string | null;
@@ -114,7 +115,7 @@ export interface ApiResponse<T = any> {
 // Payout types
 export interface PayoutResult {
   userId: string;
-  walletAddress: string;
+  payoutAddress: string;
   amountLamports: number;
   amountSol: number;
   success: boolean;

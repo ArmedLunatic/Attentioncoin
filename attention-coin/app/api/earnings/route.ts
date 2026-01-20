@@ -7,28 +7,28 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 /**
- * GET /api/earnings?wallet=<address>
+ * GET /api/earnings?username=<x_username>
  * Returns the user's eligible earnings and pool statistics
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const wallet = searchParams.get('wallet');
+    const username = searchParams.get('username');
 
-    if (!wallet) {
+    if (!username) {
       return NextResponse.json(
-        { error: 'Wallet address is required' },
+        { error: 'Username is required' },
         { status: 400 }
       );
     }
 
     const supabase = createServerClient();
 
-    // Get user by wallet address
+    // Get user by X username
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('id')
-      .eq('wallet_address', wallet)
+      .eq('x_username', username)
       .single();
 
     if (userError || !user) {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         data: {
           earnings: null,
           pool: poolStats,
-          message: 'User not found. Connect wallet and verify X account to participate.',
+          message: 'User not found. Verify your X account to participate.',
         },
       });
     }

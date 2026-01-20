@@ -1,12 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Coins,
   TrendingUp,
-  Users,
   Clock,
   Sparkles,
   Info,
@@ -15,6 +13,7 @@ import {
   ChevronUp,
   Zap,
 } from 'lucide-react';
+import { useUser } from '@/components/WalletProvider';
 import { AnimatedCounter } from '@/components/ui';
 
 interface EarningsData {
@@ -37,7 +36,7 @@ interface PoolData {
 }
 
 export default function EligibleEarnings() {
-  const { publicKey } = useWallet();
+  const { user, isAuthenticated } = useUser();
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
   const [pool, setPool] = useState<PoolData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +44,7 @@ export default function EligibleEarnings() {
   const [expanded, setExpanded] = useState(false);
 
   const fetchEarnings = useCallback(async () => {
-    if (!publicKey) {
+    if (!isAuthenticated || !user?.x_username) {
       setLoading(false);
       return;
     }
@@ -54,7 +53,7 @@ export default function EligibleEarnings() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/earnings?wallet=${publicKey.toBase58()}`);
+      const response = await fetch(`/api/earnings?username=${encodeURIComponent(user.x_username)}`);
       const result = await response.json();
 
       if (!result.success) {
@@ -69,7 +68,7 @@ export default function EligibleEarnings() {
     } finally {
       setLoading(false);
     }
-  }, [publicKey]);
+  }, [user?.x_username, isAuthenticated]);
 
   useEffect(() => {
     fetchEarnings();

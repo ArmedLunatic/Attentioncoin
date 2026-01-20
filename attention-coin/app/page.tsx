@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useUser } from '@/components/WalletProvider';
 import { motion, useSpring, useTransform } from 'framer-motion';
 import { ArrowRight, Copy, ExternalLink } from 'lucide-react';
 import { CONTRACT_ADDRESS, CASHTAG, truncateWallet, formatNumber, timeAgo } from '@/lib/utils';
@@ -106,7 +105,7 @@ function Logo({ className = '' }: { className?: string }) {
 }
 
 export default function Home() {
-  const { connected } = useWallet();
+  const { isAuthenticated } = useUser();
   const [copied, setCopied] = useState(false);
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -229,7 +228,7 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.5, ease: [0.32, 0.72, 0, 1] }}
             className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-10 sm:mt-12"
           >
-            {connected ? (
+            {isAuthenticated ? (
               <Link
                 href="/dashboard"
                 className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center"
@@ -238,7 +237,13 @@ export default function Home() {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             ) : (
-              <WalletMultiButton />
+              <Link
+                href="/login"
+                className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center"
+              >
+                Get Started
+                <ArrowRight className="w-4 h-4" />
+              </Link>
             )}
             <a
               href="#how-it-works"
@@ -269,8 +274,8 @@ export default function Home() {
               {[
                 {
                   step: '01',
-                  title: 'Connect',
-                  description: 'Link your Solana wallet and verify your X account.',
+                  title: 'Verify',
+                  description: 'Verify your X account and add your Solana address.',
                 },
                 {
                   step: '02',
@@ -499,10 +504,10 @@ export default function Home() {
               Start Earning
             </h2>
             <p className="text-body-md text-text-secondary mb-8">
-              Connect your wallet and link your X account to begin.
+              Verify your X account and add your Solana address to begin.
             </p>
 
-            {connected ? (
+            {isAuthenticated ? (
               <Link
                 href="/dashboard"
                 className="btn-primary inline-flex items-center gap-2"
@@ -511,7 +516,13 @@ export default function Home() {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             ) : (
-              <WalletMultiButton />
+              <Link
+                href="/login"
+                className="btn-primary inline-flex items-center gap-2"
+              >
+                Get Started
+                <ArrowRight className="w-4 h-4" />
+              </Link>
             )}
           </motion.div>
         </div>

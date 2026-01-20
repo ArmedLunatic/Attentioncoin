@@ -2,13 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   Twitter,
-  Link as LinkIcon,
   Send,
   CheckCircle2,
   Clock,
@@ -16,7 +13,6 @@ import {
   TrendingUp,
   Wallet,
   ExternalLink,
-  Copy,
   RefreshCw,
   Info,
   History,
@@ -29,6 +25,7 @@ import PayoutTimer from '@/components/PayoutTimer';
 import { StreakDisplay, BadgeGrid, defaultBadges } from '@/components/StreakBadges';
 import ReferralCard from '@/components/ReferralCard';
 import EligibleEarnings from '@/components/EligibleEarnings';
+import ClaimAddress from '@/components/ClaimAddress';
 import {
   AnimatedCounter,
   StatusIndicator,
@@ -37,209 +34,14 @@ import {
   StatCardSkeleton,
 } from '@/components/ui';
 import {
-  formatSol,
   formatNumber,
-  truncateWallet,
   extractTweetId,
   isValidTweetUrl,
-  generateContentHash,
   timeAgo,
   CASHTAG,
   CONTRACT_ADDRESS,
 } from '@/lib/utils';
 import type { Submission, UserStats } from '@/types';
-
-// X Account Linking Component
-function XAccountLinking({ onLinked }: { onLinked: () => void }) {
-  const { publicKey } = useWallet();
-  const { user, refreshUser } = useUser();
-  const [step, setStep] = useState<'start' | 'verify'>('start');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [username, setUsername] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  // If user is null, try to create/refresh the user record first.
-  useEffect(() => {
-    if (!user) {
-      refreshUser();
-    }
-  }, [user, refreshUser]);
-
-  const generateCode = async () => {
-    if (!publicKey) {
-      toast.error('Please connect your wallet first');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const walletAddress = publicKey.toBase58();
-      console.log('Generating code for wallet:', walletAddress);
-
-      const response = await fetch('/api/verify-x', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wallet: walletAddress,
-        }),
-      });
-
-      const result = await response.json();
-      console.log('Generate code response:', result);
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to generate code');
-      }
-
-      setVerificationCode(result.data.code);
-      setStep('verify');
-      toast.success('Verification code generated!');
-    } catch (error) {
-      console.error('Generate code error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to generate code. Check console for details.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const verifyAccount = async () => {
-    if (!username.trim()) {
-      toast.error('Please enter your X username');
-      return;
-    }
-
-    if (!publicKey) {
-      toast.error('Please connect your wallet first');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const cleanUsername = username.replace('@', '').trim();
-      const walletAddress = publicKey.toBase58();
-      console.log('Verifying account:', { wallet: walletAddress, username: cleanUsername });
-
-      const response = await fetch('/api/verify-x', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wallet: walletAddress,
-          username: cleanUsername,
-        }),
-      });
-
-      const result = await response.json();
-      console.log('Verify response:', result);
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to verify account');
-      }
-
-      toast.success('X account linked successfully!');
-      // Force page reload to ensure fresh state
-      window.location.reload();
-    } catch (error) {
-      console.error('Verification error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to verify. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  const tweetText = `Verifying my wallet for @AttentionCoin 🔐
-
-Code: ${verificationCode}
-
-${CASHTAG}`;
-
-  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
-
-  return (
-    <div className="p-6 sm:p-8 rounded-2xl bg-surface/80 border border-border">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-          <Twitter className="w-6 h-6 text-blue-400" />
-        </div>
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Link Your X Account</h2>
-          <p className="text-muted text-sm">Required to submit tweets for rewards</p>
-        </div>
-      </div>
-
-      {step === 'start' && (
-        <div className="space-y-6">
-          <p className="text-muted">
-            To verify you own your X account, you'll post a unique code. This is a one-time process.
-          </p>
-          <button
-            onClick={generateCode}
-            disabled={loading}
-            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <RefreshCw className="w-4 h-4 animate-spin mx-auto" />
-            ) : (
-              'Generate Verification Code'
-            )}
-          </button>
-        </div>
-      )}
-
-      {step === 'verify' && (
-        <div className="space-y-6">
-          {/* Step 1: Post Tweet */}
-          <div className="p-4 rounded-xl bg-surface-light border border-border">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-sm font-bold flex items-center justify-center">1</span>
-              <span className="font-medium">Post this tweet</span>
-            </div>
-            <div className="p-3 rounded-lg bg-background border border-border mb-4">
-              <p className="text-sm text-muted whitespace-pre-wrap">{tweetText}</p>
-            </div>
-            <a
-              href={tweetUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary w-full flex items-center justify-center gap-2"
-            >
-              <Twitter className="w-4 h-4" />
-              Post Tweet
-            </a>
-          </div>
-
-          {/* Step 2: Enter Username */}
-          <div className="p-4 rounded-xl bg-surface-light border border-border">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-sm font-bold flex items-center justify-center">2</span>
-              <span className="font-medium">Enter your X username</span>
-            </div>
-            <input
-              type="text"
-              placeholder="@username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="input-dark w-full mb-4"
-            />
-            <button
-              onClick={verifyAccount}
-              disabled={loading || !username.trim()}
-              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <RefreshCw className="w-4 h-4 animate-spin mx-auto" />
-              ) : (
-                'Verify & Link Account'
-              )}
-            </button>
-          </div>
-
-          <p className="text-xs text-muted text-center">
-            Note: Keep the tweet posted for at least 24 hours
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Tweet Submission Form
 function SubmissionForm({ onSubmitted, onSuccess }: { onSubmitted: () => void; onSuccess?: () => void }) {
@@ -325,7 +127,6 @@ function SubmissionForm({ onSubmitted, onSuccess }: { onSubmitted: () => void; o
         tweet_id: tweetId,
         tweet_url: tweetUrl.trim(),
         status: 'pending',
-        // These would be populated when you verify the tweet
         has_ca: tweetUrl.toLowerCase().includes(CONTRACT_ADDRESS.toLowerCase()),
         has_cashtag: tweetUrl.toLowerCase().includes(CASHTAG.toLowerCase()),
       });
@@ -547,8 +348,7 @@ interface Badge {
 // Main Dashboard Page
 export default function DashboardPage() {
   const router = useRouter();
-  const { connected, publicKey } = useWallet();
-  const { user, loading: userLoading, refreshUser } = useUser();
+  const { user, loading: userLoading, refreshUser, isAuthenticated } = useUser();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -561,12 +361,12 @@ export default function DashboardPage() {
     setShowConfetti(true);
   };
 
-  // Redirect if not connected
+  // Redirect if not authenticated
   useEffect(() => {
-    if (!userLoading && !connected) {
-      router.push('/');
+    if (!userLoading && !isAuthenticated) {
+      router.push('/login');
     }
-  }, [connected, userLoading, router]);
+  }, [isAuthenticated, userLoading, router]);
 
   // Fetch user data
   const fetchData = useCallback(async () => {
@@ -611,7 +411,7 @@ export default function DashboardPage() {
         totalSubmissions: user.total_submissions || 0,
         approvedSubmissions: approvedCount || 0,
         pendingSubmissions: pendingCount || 0,
-        rank: null, // Would need a separate query
+        rank: null,
         todaySubmissions: todayCount || 0,
       });
 
@@ -719,7 +519,7 @@ export default function DashboardPage() {
   }, [user, refreshUser, fetchData]);
 
   // Show loading or redirect
-  if (userLoading || !connected) {
+  if (userLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <RefreshCw className="w-8 h-8 text-primary animate-spin" />
@@ -727,15 +527,19 @@ export default function DashboardPage() {
     );
   }
 
-  // FIX: Show X linking if user is null (new user not yet created in DB)
-  // OR if user exists but hasn't verified their X account yet.
-  // Previously this only checked "user && !user.x_verified_at" which would
-  // skip X linking when user was null (e.g., after DB error or timing issue).
+  // User not verified (shouldn't happen with new flow, but just in case)
   if (!user || !user.x_verified_at) {
     return (
       <div className="min-h-screen py-12 px-4">
-        <div className="max-w-lg mx-auto">
-          <XAccountLinking onLinked={refreshUser} />
+        <div className="max-w-lg mx-auto text-center">
+          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-6">
+            <Twitter className="w-8 h-8 text-blue-400" />
+          </div>
+          <h1 className="text-2xl font-bold mb-4">X Account Required</h1>
+          <p className="text-muted mb-6">Please verify your X account to access the dashboard.</p>
+          <Link href="/login" className="btn-primary">
+            Go to Login
+          </Link>
         </div>
       </div>
     );
@@ -747,7 +551,7 @@ export default function DashboardPage() {
       <Confetti trigger={showConfetti} onComplete={() => setShowConfetti(false)} />
 
       <div className="max-w-6xl mx-auto">
-        {/* Header - refined */}
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -769,10 +573,9 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* Stats Grid - premium styling */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10">
           {loading ? (
-            // Skeleton loading state
             <>
               <StatCardSkeleton />
               <StatCardSkeleton />
@@ -856,7 +659,12 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Eligible Earnings - Prominent display */}
+        {/* Payout Address Section */}
+        <div className="mb-6 sm:mb-8">
+          <ClaimAddress />
+        </div>
+
+        {/* Eligible Earnings */}
         <div className="mb-6 sm:mb-8">
           <EligibleEarnings />
         </div>
@@ -902,7 +710,6 @@ export default function DashboardPage() {
             </div>
 
             {loading ? (
-              // Skeleton loading state
               <div className="space-y-4">
                 <SubmissionCardSkeleton />
                 <SubmissionCardSkeleton />

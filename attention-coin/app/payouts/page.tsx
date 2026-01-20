@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -36,8 +35,7 @@ interface Payout {
 
 export default function PayoutsPage() {
   const router = useRouter();
-  const { connected } = useWallet();
-  const { user, loading: userLoading } = useUser();
+  const { user, loading: userLoading, isAuthenticated } = useUser();
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -46,12 +44,12 @@ export default function PayoutsPage() {
     totalPayouts: 0,
   });
 
-  // Redirect if not connected
+  // Redirect if not authenticated
   useEffect(() => {
-    if (!userLoading && !connected) {
-      router.push('/');
+    if (!userLoading && !isAuthenticated) {
+      router.push('/login');
     }
-  }, [connected, userLoading, router]);
+  }, [isAuthenticated, userLoading, router]);
 
   const fetchPayouts = useCallback(async () => {
     if (!user) return;
@@ -91,7 +89,7 @@ export default function PayoutsPage() {
     fetchPayouts();
   }, [fetchPayouts]);
 
-  if (userLoading || !connected) {
+  if (userLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <RefreshCw className="w-8 h-8 text-primary animate-spin" />

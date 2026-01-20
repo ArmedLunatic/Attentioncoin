@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'sonner';
-import { WalletContextProvider } from '@/components/WalletProvider';
+import { UserProvider } from '@/components/WalletProvider';
 import Header from '@/components/Header';
 import './globals.css';
 
@@ -43,7 +43,7 @@ export default function RootLayout({
           aria-hidden="true"
         />
 
-        <WalletContextProvider>
+        <UserProvider>
           <Header />
           <main className="pt-[72px] relative z-10">
             {children}
@@ -60,7 +60,7 @@ export default function RootLayout({
               },
             }}
           />
-        </WalletContextProvider>
+        </UserProvider>
       </body>
     </html>
   );

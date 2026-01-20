@@ -23,14 +23,14 @@ interface ApprovedSubmission {
   final_score: number;
   user: {
     id: string;
-    wallet_address: string;
+    payout_address: string | null;
     x_username: string | null;
   };
 }
 
 interface UserPayout {
   userId: string;
-  walletAddress: string;
+  payoutAddress: string;
   username: string | null;
   totalScore: number;
   submissionIds: string[];
@@ -76,7 +76,7 @@ export async function getApprovedSubmissionsForPayout(): Promise<ApprovedSubmiss
       final_score,
       user:users!inner(
         id,
-        wallet_address,
+        payout_address,
         x_username
       )
     `)
@@ -105,10 +105,10 @@ export async function calculatePayoutAmounts(
 
   const config = await getPayoutConfig();
 
-  // Group submissions by user
+  // Group submissions by user (skip users without payout_address)
   const userSubmissions: Record<string, {
     userId: string;
-    walletAddress: string;
+    payoutAddress: string;
     username: string | null;
     totalScore: number;
     submissionIds: string[];
@@ -116,10 +116,17 @@ export async function calculatePayoutAmounts(
 
   for (const sub of submissions) {
     const userId = sub.user_id;
+
+    // Skip users who haven't set a payout address
+    if (!sub.user.payout_address) {
+      console.log(`[Payout] Skipping user ${sub.user.x_username || userId}: no payout address set`);
+      continue;
+    }
+
     if (!userSubmissions[userId]) {
       userSubmissions[userId] = {
         userId,
-        walletAddress: sub.user.wallet_address,
+        payoutAddress: sub.user.payout_address,
         username: sub.user.x_username,
         totalScore: 0,
         submissionIds: [],
@@ -358,7 +365,7 @@ export async function processPayouts(): Promise<PayoutSummary> {
 
   // 5. Prepare transfer requests
   const transfers: TransferRequest[] = userPayouts.map((payout, index) => ({
-    recipient: payout.walletAddress,
+    recipient: payout.payoutAddress,
     lamports: payout.amountLamports,
     metadata: {
       payoutId: payoutIds[index],
@@ -399,7 +406,7 @@ export async function processPayouts(): Promise<PayoutSummary> {
 
       results.push({
         userId: payout.userId,
-        walletAddress: payout.walletAddress,
+        payoutAddress: payout.payoutAddress,
         amountLamports: result.lamports,
         amountSol: result.lamports / LAMPORTS_PER_SOL,
         success: true,
@@ -410,7 +417,7 @@ export async function processPayouts(): Promise<PayoutSummary> {
       failed++;
       results.push({
         userId: payout.userId,
-        walletAddress: payout.walletAddress,
+        payoutAddress: payout.payoutAddress,
         amountLamports: result.lamports,
         amountSol: result.lamports / LAMPORTS_PER_SOL,
         success: false,

@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import bs58 from 'bs58';
+import { CheckCircle, AlertCircle, Loader2, Lock } from 'lucide-react';
 
 export default function AdminPage() {
-  const { publicKey, signMessage } = useWallet();
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalSubmissions: 0,
@@ -17,7 +16,7 @@ export default function AdminPage() {
   });
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [tab, setTab] = useState('dashboard');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [engagementData, setEngagementData] = useState({
@@ -26,29 +25,21 @@ export default function AdminPage() {
     replies: 0,
   });
   const [error, setError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
-  const ADMIN_WALLET = process.env.NEXT_PUBLIC_ADMIN_WALLET;
+  // Store password in session for subsequent API calls
+  const [storedPassword, setStoredPassword] = useState<string | null>(null);
 
   const callAdminApi = useCallback(async (action: string, data: Record<string, any> = {}) => {
-    if (!publicKey || !signMessage) {
-      throw new Error('Wallet not connected');
+    if (!storedPassword) {
+      throw new Error('Not authenticated');
     }
-
-    const timestamp = Date.now();
-    const message = `admin:${action}:${timestamp}`;
-
-    // Sign the message with wallet
-    const encodedMessage = new TextEncoder().encode(message);
-    const signatureBytes = await signMessage(encodedMessage);
-    const signature = bs58.encode(signatureBytes);
 
     const response = await fetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        wallet: publicKey.toBase58(),
-        signature,
-        timestamp,
+        password: storedPassword,
         action,
         ...data,
       }),
@@ -61,11 +52,10 @@ export default function AdminPage() {
     }
 
     return result;
-  }, [publicKey, signMessage]);
+  }, [storedPassword]);
 
   const loadData = useCallback(async () => {
-    if (!publicKey || publicKey.toBase58() !== ADMIN_WALLET) {
-      setLoading(false);
+    if (!isAuthenticated || !storedPassword) {
       return;
     }
 
@@ -82,24 +72,57 @@ export default function AdminPage() {
     } catch (err: any) {
       console.error('Error loading data:', err);
       setError(err.message || 'Failed to load data');
+      // If unauthorized, log out
+      if (err.message?.includes('Unauthorized')) {
+        setIsAuthenticated(false);
+        setStoredPassword(null);
+      }
     } finally {
       setLoading(false);
     }
-  }, [publicKey, ADMIN_WALLET, callAdminApi]);
+  }, [isAuthenticated, storedPassword, callAdminApi]);
 
+  // Load data when authenticated
   useEffect(() => {
-    if (!publicKey) {
-      setLoading(false);
-      return;
+    if (isAuthenticated) {
+      loadData();
     }
+  }, [isAuthenticated, loadData]);
 
-    if (publicKey.toBase58() !== ADMIN_WALLET) {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    setLoading(true);
+
+    try {
+      // Test the password by making an API call
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password,
+          action: 'getStats',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Invalid password');
+      }
+
+      // Password is correct
+      setStoredPassword(password);
+      setIsAuthenticated(true);
+      setStats(result.data.stats);
+      setSubmissions(result.data.submissions);
+      setPassword(''); // Clear the password field
+    } catch (err: any) {
+      setLoginError(err.message || 'Invalid password');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    loadData();
-  }, [publicKey, ADMIN_WALLET, loadData]);
+  };
 
   async function approveSubmission(submissionId: string) {
     try {
@@ -155,36 +178,59 @@ export default function AdminPage() {
     }
   }
 
-  if (!publicKey) {
+  // Login form
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-surface-light border border-border flex items-center justify-center mx-auto mb-6">
-            <AlertCircle className="w-8 h-8 text-muted" />
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-surface-light border border-border flex items-center justify-center mx-auto mb-6">
+              <Lock className="w-8 h-8 text-muted" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight mb-3">Admin Access</h1>
+            <p className="text-muted-light">Enter your admin password to continue</p>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-3">Admin Access Required</h1>
-          <p className="text-muted-light">Please connect your wallet to access the admin panel</p>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label htmlFor="password" className="block text-sm text-muted mb-2">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input-dark w-full"
+                placeholder="Enter admin password"
+                autoFocus
+              />
+            </div>
+
+            {loginError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                <p className="text-red-400 text-sm">{loginError}</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !password}
+              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+              ) : (
+                'Login'
+              )}
+            </button>
+          </form>
         </div>
       </div>
     );
   }
 
-  if (publicKey.toBase58() !== ADMIN_WALLET) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
-            <AlertCircle className="w-8 h-8 text-red-400" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-3">Not Authorized</h1>
-          <p className="text-muted-light mb-2">This wallet is not authorized to access the admin panel</p>
-          <p className="text-muted font-mono text-sm">Connected: {publicKey.toBase58().slice(0, 8)}...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
+  if (loading && submissions.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center">
@@ -198,7 +244,18 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-background py-6 sm:py-10 px-4 sm:px-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-8">Admin Dashboard</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Admin Dashboard</h1>
+          <button
+            onClick={() => {
+              setIsAuthenticated(false);
+              setStoredPassword(null);
+            }}
+            className="text-sm text-muted hover:text-white transition-colors"
+          >
+            Logout
+          </button>
+        </div>
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-8">
@@ -207,7 +264,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Stats Grid - premium styling */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="bg-surface/80 border border-border rounded-2xl p-5 sm:p-6 hover:border-border-light transition-all duration-200">
             <p className="text-muted text-sm mb-1">Total Users</p>
@@ -223,7 +280,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Tabs - premium styling */}
+        {/* Tabs */}
         <div className="flex gap-2 sm:gap-3 mb-8 flex-wrap">
           <button
             onClick={() => setTab('dashboard')}
@@ -428,6 +485,11 @@ export default function AdminPage() {
                       <p className="text-muted text-sm mt-0.5">
                         {((submission.users?.total_earned_lamports || 0) / 1000000000).toFixed(4)} SOL earned
                       </p>
+                      {submission.users?.payout_address && (
+                        <p className="text-xs text-muted mt-1">
+                          Payout: {submission.users.payout_address.slice(0, 6)}...{submission.users.payout_address.slice(-4)}
+                        </p>
+                      )}
                     </div>
                     <button
                       onClick={() => markAsPaid(submission.id)}
