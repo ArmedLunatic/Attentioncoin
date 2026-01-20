@@ -71,6 +71,15 @@ export default function Header() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
+<a
+  href="https://x.com/i/communities/2013663619725365292"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="hidden md:inline-flex px-3 py-2 rounded-lg text-body-sm text-text-tertiary hover:text-foreground transition-colors"
+>
+  Community
+</a>
+
            {isAuthenticated && user?.x_username && (
   <div className="hidden sm:block text-body-sm text-text-tertiary">
     @{user.x_username}
@@ -110,6 +119,16 @@ export default function Header() {
         {/* Mobile Nav */}
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-white/[0.04]">
+<a
+  href="https://x.com/i/communities/2013663619725365292"
+  target="_blank"
+  rel="noopener noreferrer"
+  onClick={() => setMobileMenuOpen(false)}
+  className="px-3 py-3 rounded-lg text-body-sm text-text-tertiary hover:text-foreground"
+>
+  Community
+</a>
+
             <nav className="flex flex-col gap-1">
               {visibleNavItems.map(item => (
                 <Link
