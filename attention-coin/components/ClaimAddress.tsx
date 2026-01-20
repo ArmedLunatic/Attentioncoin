@@ -20,8 +20,11 @@ export default function ClaimAddress() {
       new PublicKey(address);
 
       if (!user?.x_username) {
-        throw new Error('X username not found');
+        console.error('Missing X username for user:', user);
+        throw new Error('Please verify your X account first before setting a payout address');
       }
+
+      console.log('Setting payout address:', { username: user.x_username, address });
 
       const res = await fetch('/api/user/payout-address', {
         method: 'POST',
@@ -47,8 +50,8 @@ export default function ClaimAddress() {
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 mt-6">
-      <h3 className="font-semibold mb-2">Payout Address</h3>
-      <p className="text-sm text-text-secondary mb-3">
+      <h3 className="font-semibold text-foreground mb-2">Payout Address</h3>
+      <p className="text-sm text-muted mb-3">
         Enter the Solana address where rewards will be sent.
       </p>
 
