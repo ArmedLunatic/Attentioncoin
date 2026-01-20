@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-
+console.log('ADMIN_PASSWORD PRESENT:', !!process.env.ADMIN_PASSWORD);
 function verifyPassword(provided: string) {
   return provided.trim() === ADMIN_PASSWORD.trim();
 }
