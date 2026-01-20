@@ -229,6 +229,49 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      case 'recordPayout': {
+        if (!submissionId) {
+          return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
+        }
+
+        // Create reward record with provided data
+        const { signature, amount, recipient, username } = body;
+        
+        if (!signature || !amount || !recipient) {
+          return NextResponse.json({ error: 'Missing payout data' }, { status: 400 });
+        }
+
+        // Get user and submission details
+        const { data: submission, error: submissionError } = await supabase
+          .from('submissions')
+          .select('user_id, final_score')
+          .eq('id', submissionId)
+          .single();
+
+        if (submissionError || !submission) {
+          return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+        }
+
+        // Create reward record
+        const { error: rewardError } = await supabase
+          .from('rewards')
+          .insert({
+            user_id: submission.user_id,
+            period_date: new Date().toISOString().split('T')[0],
+            total_score: submission.final_score || 0,
+            amount_lamports: Math.round(amount * LAMPORTS_PER_SOL),
+            status: 'completed',
+            tx_signature: signature,
+          });
+
+        if (rewardError) {
+          console.error('Failed to create reward record:', rewardError);
+          return NextResponse.json({ error: 'Failed to record payout' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true });
+      }
+
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
