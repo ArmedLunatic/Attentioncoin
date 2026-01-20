@@ -178,10 +178,10 @@ export function DexScreenerButton({ tokenAddress }: { tokenAddress: string }) {
 /**
  * Pre-configured X Community Button
  */
-export function XCommunityButton({ handle }: { handle: string }) {
+export function XCommunityButton({ communityUrl }: { communityUrl: string }) {
   return (
     <MagneticButton
-      href={`https://x.com/${handle}`}
+      href={communityUrl}
       icon={<XIcon className="w-4 h-4" />}
       label="Community"
     />

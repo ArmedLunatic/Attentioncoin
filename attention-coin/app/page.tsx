@@ -186,7 +186,7 @@ export default function Home() {
             className="flex flex-wrap items-center justify-center gap-3 mb-8 sm:mb-10"
           >
             <DexScreenerButton tokenAddress={CONTRACT_ADDRESS} />
-            <XCommunityButton handle="AttentionSol" />
+            <XCommunityButton communityUrl="https://x.com/i/communities/2013663619725365292" />
           </motion.div>
 
           {/* The Evidence - Dominant element with 3D tilt */}
