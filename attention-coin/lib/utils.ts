@@ -134,5 +134,5 @@ export function daysSince(date: string | Date): number {
 }
 
 // Contract address and cashtag
-export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || 'YOUR_CA_HERE';
+export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || 'AKQ6hYJraUzHQeeXTcD3VsZ5r6VG97H8CFzUSKXPpump';
 export const CASHTAG = process.env.NEXT_PUBLIC_CASHTAG || '$ATTENTION';
