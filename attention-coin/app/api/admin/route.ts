@@ -26,15 +26,19 @@ function verifyPassword(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
 
   try {
-    const providedBuffer = Buffer.from(provided);
-    const expectedBuffer = Buffer.from(expected);
+    const providedBuffer = Buffer.from(provided.trim());
+    const expectedBuffer = Buffer.from(expected.trim());
 
-    // If lengths differ, still compare to prevent timing leaks
     if (providedBuffer.length !== expectedBuffer.length) {
-      // Compare with expected to burn time, but return false
       timingSafeEqual(expectedBuffer, expectedBuffer);
       return false;
     }
+
+    return timingSafeEqual(providedBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
     return timingSafeEqual(providedBuffer, expectedBuffer);
   } catch {
