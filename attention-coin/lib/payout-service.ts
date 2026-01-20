@@ -81,6 +81,7 @@ export async function getApprovedSubmissionsForPayout(): Promise<ApprovedSubmiss
       )
     `)
     .eq('status', 'approved')
+    .neq('status', 'paid')
     .gt('final_score', 0)
     .order('created_at', { ascending: true });
 

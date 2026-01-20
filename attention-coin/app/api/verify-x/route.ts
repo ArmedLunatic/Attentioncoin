@@ -184,6 +184,20 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Rate limiting: Require minimum time between code generation and verification
+    // This slows down automated abuse attempts
+    // NOTE: Production should add X API tweet search validation for full security
+    const codeGeneratedAt = new Date(user.verification_expires).getTime() - (24 * 60 * 60 * 1000); // expires is 24h after generation
+    const now = Date.now();
+    const minWaitTime = 30 * 1000; // 30 seconds minimum
+
+    if (now - codeGeneratedAt < minWaitTime) {
+      return NextResponse.json(
+        { error: 'Please wait at least 30 seconds after generating code before verifying' },
+        { status: 400 }
+      );
+    }
+
     // Mark user as verified
     const { error: updateError } = await supabase
       .from('users')
