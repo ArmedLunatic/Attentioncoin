@@ -13,8 +13,16 @@ export async function POST(req: NextRequest) {
     const { password, action, submissionId, engagementData, rejectionReason } = body;
 
     if (!password || !verifyPassword(password)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+     return NextResponse.json({
+  success: true,
+  data: {
+    stats: {
+      totalUsers: totalUsers ?? 0,
+    },
+    submissions: submissions || [],
+  },
+});
+
 
     const supabase = createServerClient();
 
