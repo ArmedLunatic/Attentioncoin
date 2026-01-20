@@ -20,27 +20,23 @@ interface AdminAction {
 }
 
 /**
- * Timing-safe password comparison to prevent timing attacks
+ * Timing-safe password comparison
  */
 function verifyPassword(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
+  return provided.trim() === expected.trim();
+}
 
   try {
-    const providedBuffer = Buffer.from(provided.trim());
-    const expectedBuffer = Buffer.from(expected.trim());
+    const a = Buffer.from(provided.trim());
+    const b = Buffer.from(expected.trim());
 
-    if (providedBuffer.length !== expectedBuffer.length) {
-      timingSafeEqual(expectedBuffer, expectedBuffer);
+    if (a.length !== b.length) {
+      timingSafeEqual(b, b);
       return false;
     }
 
-    return timingSafeEqual(providedBuffer, expectedBuffer);
-  } catch {
-    return false;
-  }
-}
-
-    return timingSafeEqual(providedBuffer, expectedBuffer);
+    return timingSafeEqual(a, b);
   } catch {
     return false;
   }
@@ -49,23 +45,12 @@ function verifyPassword(provided: string, expected: string): boolean {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { password, ...actionData } = body as {
-      password: string;
-      action: AdminAction['action'];
-      submissionId?: string;
-      engagementData?: AdminAction['engagementData'];
-      rejectionReason?: string;
-    };
+    const { password, ...actionData } = body;
 
-    // Validate required fields
     if (!password) {
-      return NextResponse.json(
-        { error: 'Missing password' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing password' }, { status: 400 });
     }
 
-    // Verify the password
     if (!ADMIN_PASSWORD || !verifyPassword(password, ADMIN_PASSWORD)) {
       return NextResponse.json(
         { error: 'Unauthorized: Invalid password' },
@@ -73,7 +58,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use server client with service role for admin operations
     const supabase = createServerClient();
 
     switch (actionData.action) {
@@ -82,18 +66,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
         }
 
-        // Calculate final_score with DIMINISHING RETURNS formula
         const likes = actionData.engagementData?.likes || 0;
         const reposts = actionData.engagementData?.reposts || 0;
         const replies = actionData.engagementData?.replies || 0;
 
-        // Raw engagement (reposts still weighted 2x for reach)
-        const rawEngagement = likes + (reposts * 2) + replies;
-
-        // Logarithmic scaling: prevents runaway scores
-        const finalScore = rawEngagement > 0
-          ? Math.round(Math.log10(rawEngagement + 1) * 10 * 100) / 100
-          : 0;
+        const raw = likes + reposts * 2 + replies;
+        const finalScore =
+          raw > 0 ? Math.round(Math.log10(raw + 1) * 100) / 10 : 0;
 
         const { error } = await supabase
           .from('submissions')
@@ -108,11 +87,10 @@ export async function POST(request: NextRequest) {
           .eq('id', actionData.submissionId);
 
         if (error) {
-          console.error('Error approving submission:', error);
-          return NextResponse.json({ error: 'Failed to approve submission' }, { status: 500 });
+          return NextResponse.json({ error: 'Approve failed' }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true, message: 'Submission approved' });
+        return NextResponse.json({ success: true });
       }
 
       case 'reject': {
@@ -120,7 +98,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
         }
 
-        const { error } = await supabase
+        await supabase
           .from('submissions')
           .update({
             status: 'rejected',
@@ -128,12 +106,7 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', actionData.submissionId);
 
-        if (error) {
-          console.error('Error rejecting submission:', error);
-          return NextResponse.json({ error: 'Failed to reject submission' }, { status: 500 });
-        }
-
-        return NextResponse.json({ success: true, message: 'Submission rejected' });
+        return NextResponse.json({ success: true });
       }
 
       case 'markPaid': {
@@ -141,60 +114,31 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
         }
 
-        const { error } = await supabase
+        await supabase
           .from('submissions')
           .update({ status: 'paid' })
           .eq('id', actionData.submissionId);
 
-        if (error) {
-          console.error('Error marking as paid:', error);
-          return NextResponse.json({ error: 'Failed to mark as paid' }, { status: 500 });
-        }
-
-        return NextResponse.json({ success: true, message: 'Marked as paid' });
+        return NextResponse.json({ success: true });
       }
 
       case 'getStats': {
-        // Get submissions with user data
-        const { data: submissionsData } = await supabase
+        const { data: submissions } = await supabase
           .from('submissions')
-          .select('*, users(wallet_address, x_username, total_earned_lamports, payout_address)')
+          .select('*, users(x_username, payout_address)')
           .order('created_at', { ascending: false });
-
-        // Get users count
-        const { count: totalUsers } = await supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true });
-
-        const submissions = submissionsData || [];
-        const totalSubmissions = submissions.length;
-        const totalApproved = submissions.filter(s => s.status === 'approved' || s.status === 'paid').length;
-        const pendingApproval = submissions.filter(s => s.status === 'pending').length;
-        const pendingPayment = submissions.filter(s => s.status === 'approved').length;
 
         return NextResponse.json({
           success: true,
-          data: {
-            stats: {
-              totalUsers: totalUsers || 0,
-              totalSubmissions,
-              totalApproved,
-              pendingApproval,
-              pendingPayment,
-            },
-            submissions,
-          },
+          submissions: submissions || [],
         });
       }
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
-  } catch (error) {
-    console.error('Admin API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
