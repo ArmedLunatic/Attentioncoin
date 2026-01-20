@@ -48,6 +48,14 @@ export default function RootLayout({
           <main className="pt-[72px] relative z-10">
             {children}
           </main>
+<a
+  href="https://x.com/i/communities/2013663619725365292"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="fixed bottom-5 right-5 z-50 bg-black text-white px-4 py-2 rounded-lg font-semibold hover:opacity-80"
+>
+  Follow us on X
+</a>
           <Toaster
             theme="dark"
             position="bottom-right"
