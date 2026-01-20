@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-console.log('ADMIN_PASSWORD PRESENT:', !!process.env.ADMIN_PASSWORD);
+
 function verifyPassword(provided: string) {
   return provided.trim() === ADMIN_PASSWORD.trim();
 }
@@ -13,16 +13,8 @@ export async function POST(req: NextRequest) {
     const { password, action, submissionId, engagementData, rejectionReason } = body;
 
     if (!password || !verifyPassword(password)) {
-     return NextResponse.json({
-  success: true,
-  data: {
-    stats: {
-      totalUsers: totalUsers ?? 0,
-    },
-    submissions: submissions || [],
-  },
-});
-
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
 
     const supabase = createServerClient();
 
@@ -39,7 +31,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         data: {
-          totalUsers,
+          stats: {
+            totalUsers: totalUsers || 0,
+          },
           submissions: submissions || [],
         },
       });
@@ -51,4 +45,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
-
