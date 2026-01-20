@@ -19,10 +19,17 @@ export default function ClaimAddress() {
       // Validate Solana address
       new PublicKey(address);
 
+      if (!user?.x_username) {
+        throw new Error('X username not found');
+      }
+
       const res = await fetch('/api/user/payout-address', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payout_address: address }),
+        body: JSON.stringify({ 
+          username: user.x_username,
+          payout_address: address 
+        }),
       });
 
       if (!res.ok) {
