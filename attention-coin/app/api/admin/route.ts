@@ -225,13 +225,15 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        // Get all approved submissions that haven't been paid yet, aggregated by user
+        // Get all approved submissions that haven't been paid yet
+        // Note: We check for NULL paid_at since paid column may not exist yet
         const { data: unpaidSubmissions, error: unpaidError } = await supabase
           .from('submissions')
           .select(`
             id,
             user_id,
             final_score,
+            paid_at,
             users (
               x_username,
               payout_address,
@@ -239,7 +241,7 @@ export async function POST(req: Request) {
             )
           `)
           .eq('status', 'approved')
-          .eq('paid', false);
+          .is('paid_at', null);
 
         if (unpaidError) {
           console.error('Error fetching unpaid submissions:', unpaidError);
@@ -316,10 +318,10 @@ export async function POST(req: Request) {
         // Get all unpaid approved submissions for this user
         const { data: userSubmissions, error: submissionsError } = await supabase
           .from('submissions')
-          .select('id, final_score')
+          .select('id, final_score, paid_at')
           .eq('user_id', userId)
           .eq('status', 'approved')
-          .eq('paid', false);
+          .is('paid_at', null);
 
         if (submissionsError) {
           console.error('Error fetching user submissions:', submissionsError);
@@ -391,12 +393,11 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'Missing required fields for recording payout' }, { status: 400 });
         }
 
-        // Update submissions as paid
+        // Update submissions as paid (using paid_at timestamp as indicator)
         if (Array.isArray(submissionIds) && submissionIds.length > 0) {
           const { error: updateError } = await supabase
             .from('submissions')
             .update({
-              paid: true,
               paid_at: new Date().toISOString(),
               tx_signature: signature
             })
