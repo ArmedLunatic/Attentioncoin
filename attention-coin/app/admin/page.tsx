@@ -110,7 +110,7 @@ export default function AdminPage() {
       setAdminWalletPubKey(window.solana.publicKey.toString());
       
       // Get balance
-      const connection = new window.solanaWeb3.Connection(
+      const connection = new (window as any).solanaWeb3.Connection(
         'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
       );
       connection.getBalance(window.solana.publicKey).then((balance: number) => {
