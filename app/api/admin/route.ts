@@ -14,6 +14,6 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ message: "Payout successful" }), { status: 200 });
   } catch (error) {
     console.error('Failed to send payout: ', error);
-    return new Response(JSON.stringify({ message: "Failed to send payout", error }), { status: 500 });
+    return new Response(JSON<｜begin▁of▁sentence｜>.stringify({ message: "Failed to send payout", error }), { status: 500 });
   }
 }
