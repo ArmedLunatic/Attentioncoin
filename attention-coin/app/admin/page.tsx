@@ -44,6 +44,15 @@ export default function AdminPage() {
   // Admin wallet context - only works on admin page
   const { isAdminAuthenticated } = useAdminWallet();
   const simpleWallet = useSimpleWallet();
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 Admin page debug:');
+    console.log('- isAdminAuthenticated:', isAdminAuthenticated);
+    console.log('- simpleWallet.connected:', simpleWallet.connected);
+    console.log('- simpleWallet.publicKey:', simpleWallet.publicKey);
+    console.log('- window.solana:', typeof window !== 'undefined' ? (window as any).solana : 'window undefined');
+  }, [isAdminAuthenticated, simpleWallet.connected, simpleWallet.publicKey]);
 
   const callAdminApi = useCallback(async (action: string, data: Record<string, any> = {}) => {
     if (!storedPassword) {
