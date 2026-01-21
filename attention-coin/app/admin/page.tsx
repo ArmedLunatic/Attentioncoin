@@ -1,19 +1,40 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { CheckCircle, AlertCircle, Loader2, Lock, Wallet } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, Wallet } from 'lucide-react';
+import bs58 from 'bs58';
 
 // Add global type for Phantom wallet
 declare global {
   interface Window {
-    solana?: any;
+    solana?: {
+      isPhantom?: boolean;
+      publicKey?: { toString: () => string; toBytes: () => Uint8Array };
+      connect: () => Promise<{ publicKey: { toString: () => string } }>;
+      disconnect: () => Promise<void>;
+      signMessage: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+      on: (event: string, callback: () => void) => void;
+      off: (event: string, callback: () => void) => void;
+    };
     solanaWeb3: any;
   }
 }
 
 export default function AdminPage() {
-  const [password, setPassword] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Client-side mount state
+  const [isMounted, setIsMounted] = useState(false);
+  const [phantomInstalled, setPhantomInstalled] = useState(false);
+
+  // Wallet-based authentication state
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [walletPublicKey, setWalletPublicKey] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [connecting, setConnecting] = useState(false);
+  const [authChecking, setAuthChecking] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Dashboard state
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalSubmissions: 0,
@@ -35,27 +56,31 @@ export default function AdminPage() {
     replies: 0,
   });
   const [error, setError] = useState<string | null>(null);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [customPayoutAmount, setCustomPayoutAmount] = useState<string>('');
-  const [adminWalletConnected, setAdminWalletConnected] = useState(false);
-  const [adminWalletPubKey, setAdminWalletPubKey] = useState<string | null>(null);
-  const [adminBalance, setAdminBalance] = useState<number>(0);
-  const [connecting, setConnecting] = useState(false);
 
-  // Store password in session for subsequent API calls
-  const [storedPassword, setStoredPassword] = useState<string | null>(null);
-
+  /**
+   * Sign a message with Phantom wallet and call admin API
+   */
   const callAdminApi = useCallback(async (action: string, data: Record<string, any> = {}) => {
-    if (!storedPassword) {
-      throw new Error('Not authenticated');
+    if (!window.solana?.publicKey) {
+      throw new Error('Wallet not connected');
     }
+
+    const publicKey = window.solana.publicKey.toString();
+    const submissionId = data.submissionId || '';
+    const message = `admin-action-${action}-${submissionId}`;
+
+    // Sign the message with Phantom
+    const encodedMessage = new TextEncoder().encode(message);
+    const signedMessage = await window.solana.signMessage(encodedMessage);
+    const signature = bs58.encode(signedMessage.signature);
 
     const response = await fetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        password: storedPassword,
         action,
+        signature,
+        publicKey,
         ...data,
       }),
     });
@@ -67,10 +92,116 @@ export default function AdminPage() {
     }
 
     return result;
-  }, [storedPassword]);
+  }, []);
 
+  /**
+   * Verify wallet is in admin allowlist
+   */
+  const verifyAdminAccess = useCallback(async () => {
+    if (!window.solana?.publicKey) {
+      return false;
+    }
+
+    setAuthChecking(true);
+    setAuthError(null);
+
+    try {
+      // Try to call getStats - if successful, wallet is admin
+      const result = await callAdminApi('getStats');
+      if (result.success) {
+        setIsAdmin(true);
+        setStats(result.data.stats);
+        setSubmissions(result.data.submissions);
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      const errorMsg = err.message || 'Access denied';
+      if (errorMsg.includes('Unauthorized') || errorMsg.includes('403')) {
+        setAuthError('This wallet is not in the admin allowlist.');
+      } else if (errorMsg.includes('Invalid signature') || errorMsg.includes('401')) {
+        setAuthError('Signature verification failed. Please try again.');
+      } else {
+        setAuthError(errorMsg);
+      }
+      setIsAdmin(false);
+      return false;
+    } finally {
+      setAuthChecking(false);
+    }
+  }, [callAdminApi]);
+
+  /**
+   * Connect to Phantom wallet
+   */
+  const connectWallet = async () => {
+    if (!window.solana?.isPhantom) {
+      window.open('https://phantom.app', '_blank');
+      return;
+    }
+
+    setConnecting(true);
+    setAuthError(null);
+
+    try {
+      const response = await window.solana.connect();
+      const pubKey = response.publicKey.toString();
+      setWalletConnected(true);
+      setWalletPublicKey(pubKey);
+
+      // Get wallet balance
+      await updateWalletBalance(pubKey);
+
+      // Verify admin access
+      await verifyAdminAccess();
+    } catch (err: any) {
+      console.error('Failed to connect wallet:', err);
+      setAuthError(err.message || 'Failed to connect wallet');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  /**
+   * Disconnect wallet and log out
+   */
+  const disconnectWallet = async () => {
+    if (window.solana) {
+      try {
+        await window.solana.disconnect();
+      } catch (err) {
+        console.error('Error disconnecting:', err);
+      }
+    }
+    setWalletConnected(false);
+    setWalletPublicKey(null);
+    setIsAdmin(false);
+    setWalletBalance(0);
+    setAuthError(null);
+  };
+
+  /**
+   * Update wallet balance
+   */
+  const updateWalletBalance = async (publicKey: string) => {
+    try {
+      const connection = new (window as any).solanaWeb3.Connection(
+        `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY || '60022fb0-2daf-404f-af6f-b7db9ab0efc5'}`,
+        'confirmed'
+      );
+      const pubKey = new (window as any).solanaWeb3.PublicKey(publicKey);
+      const balance = await connection.getBalance(pubKey);
+      setWalletBalance(balance);
+    } catch (err) {
+      console.error('Failed to get balance:', err);
+    }
+  };
+
+  /**
+   * Load dashboard data
+   */
   const loadData = useCallback(async () => {
-    if (!isAuthenticated || !storedPassword) {
+    if (!isAdmin || !walletConnected) {
       return;
     }
 
@@ -94,122 +225,66 @@ export default function AdminPage() {
     } catch (err: any) {
       console.error('Error loading data:', err);
       setError(err.message || 'Failed to load data');
-      // If unauthorized, log out
-      if (err.message?.includes('Unauthorized')) {
-        setIsAuthenticated(false);
-        setStoredPassword(null);
+      // If unauthorized, reset admin state
+      if (err.message?.includes('Unauthorized') || err.message?.includes('403')) {
+        setIsAdmin(false);
+        setAuthError('Session expired. Please reconnect your wallet.');
       }
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, storedPassword, callAdminApi]);
+  }, [isAdmin, walletConnected, callAdminApi]);
 
-  // Load data when authenticated
+  // Check wallet connection on mount
   useEffect(() => {
-    if (isAuthenticated) {
+    setIsMounted(true);
+
+    const checkConnection = async () => {
+      // Check if Phantom is installed
+      const hasPhantom = !!(window.solana?.isPhantom);
+      setPhantomInstalled(hasPhantom);
+
+      if (hasPhantom && window.solana?.publicKey) {
+        const pubKey = window.solana.publicKey.toString();
+        setWalletConnected(true);
+        setWalletPublicKey(pubKey);
+        await updateWalletBalance(pubKey);
+        await verifyAdminAccess();
+      }
+    };
+
+    // Wait for Phantom to inject
+    const timer = setTimeout(checkConnection, 100);
+    return () => clearTimeout(timer);
+  }, [verifyAdminAccess]);
+
+  // Listen for account changes
+  useEffect(() => {
+    if (!isMounted || typeof window === 'undefined' || !window.solana) return;
+
+    const handleAccountChange = () => {
+      if (window.solana?.publicKey) {
+        const pubKey = window.solana.publicKey.toString();
+        setWalletPublicKey(pubKey);
+        updateWalletBalance(pubKey);
+        verifyAdminAccess();
+      } else {
+        disconnectWallet();
+      }
+    };
+
+    window.solana.on('accountChanged', handleAccountChange);
+    return () => {
+      window.solana?.off('accountChanged', handleAccountChange);
+    };
+  }, [isMounted, verifyAdminAccess]);
+
+  // Load data when admin is verified
+  useEffect(() => {
+    if (isAdmin) {
       loadData();
     }
-  }, [isAuthenticated, loadData]);
-
-  // Check admin wallet connection
-  const checkWalletConnection = () => {
-    if (window.solana && window.solana.publicKey) {
-      setAdminWalletConnected(true);
-      setAdminWalletPubKey(window.solana.publicKey.toString());
-      
-      // Get balance
-      const connection = new (window as any).solanaWeb3.Connection(
-        'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
-      );
-      connection.getBalance(window.solana.publicKey).then((balance: number) => {
-        setAdminBalance(balance);
-      });
-    } else {
-      setAdminWalletConnected(false);
-      setAdminWalletPubKey(null);
-      setAdminBalance(0);
-    }
-  };
-
-  // Connect to Phantom wallet
-  const connectWallet = async () => {
-    if (!window.solana) {
-      alert('Please install Phantom wallet first: https://phantom.app');
-      return;
-    }
-
-    setConnecting(true);
-    try {
-      const response = await window.solana.connect();
-      setAdminWalletConnected(true);
-      setAdminWalletPubKey(response.publicKey.toString());
-      
-      // Get balance
-      const connection = new (window as any).solanaWeb3.Connection(
-        'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
-      );
-      const balance = await connection.getBalance(response.publicKey);
-      setAdminBalance(balance);
-      
-      console.log('✅ Admin wallet connected:', response.publicKey.toString());
-    } catch (error: any) {
-      console.error('Failed to connect wallet:', error);
-      alert('Failed to connect wallet: ' + error.message);
-    } finally {
-      setConnecting(false);
-    }
-  };
-
-  // Check wallet connection periodically
-  useEffect(() => {
-    checkWalletConnection();
-    
-    // Listen for account changes
-    if (window.solana) {
-      const handleAccountChange = () => {
-        checkWalletConnection();
-      };
-      window.solana.on('accountChanged', handleAccountChange);
-      return () => {
-        window.solana.off('accountChanged', handleAccountChange);
-      };
-    }
-  }, []);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-    setLoading(true);
-
-    try {
-      // Test the password by making an API call
-      const response = await fetch('/api/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password,
-          action: 'getStats',
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Invalid password');
-      }
-
-      // Password is correct
-      setStoredPassword(password);
-      setIsAuthenticated(true);
-      setStats(result.data.stats);
-      setSubmissions(result.data.submissions);
-      setPassword(''); // Clear the password field
-    } catch (err: any) {
-      setLoginError(err.message || 'Invalid password');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [isAdmin, loadData]);
 
   async function approveSubmission(submissionId: string) {
     try {
@@ -254,13 +329,8 @@ export default function AdminPage() {
       setActionLoading(`aggregate-${userId}`);
       setError(null);
 
-      if (!adminWalletConnected || !adminWalletPubKey) {
-        throw new Error('Admin wallet not connected. Please connect your Phantom wallet.');
-      }
-
-      // Double-check wallet is still connected
       if (!window.solana?.publicKey) {
-        throw new Error('Phantom wallet disconnected. Please reconnect your wallet.');
+        throw new Error('Wallet not connected. Please reconnect your Phantom wallet.');
       }
 
       // Get payout details from API
@@ -275,16 +345,16 @@ export default function AdminPage() {
       // Validate admin wallet balance with buffer
       const requiredLamports = data.amountLamports;
       const feeBuffer = 2000000; // 0.002 SOL buffer for fees
-      if (adminBalance < requiredLamports + feeBuffer) {
-        throw new Error(`Insufficient admin wallet balance. Have ${(adminBalance / 1000000000).toFixed(4)} SOL, need ${((requiredLamports + feeBuffer) / 1000000000).toFixed(4)} SOL (includes fees)`);
+      if (walletBalance < requiredLamports + feeBuffer) {
+        throw new Error(`Insufficient wallet balance. Have ${(walletBalance / 1000000000).toFixed(4)} SOL, need ${((requiredLamports + feeBuffer) / 1000000000).toFixed(4)} SOL (includes fees)`);
       }
 
-      // Execute client-side transfer - this will trigger Phantom popup immediately
+      // Execute client-side transfer - this will trigger Phantom popup
       const connection = new (window as any).solanaWeb3.Connection(
-        'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5',
+        `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY || '60022fb0-2daf-404f-af6f-b7db9ab0efc5'}`,
         'confirmed'
       );
-      
+
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       const transaction = new (window as any).solanaWeb3.Transaction({
         blockhash,
@@ -303,11 +373,14 @@ export default function AdminPage() {
         setTimeout(() => reject(new Error('Wallet signing timeout. Please try again.')), 60000);
       });
 
-      // Sign transaction with Phantom wallet - this opens the wallet popup immediately
+      // Sign transaction with Phantom wallet
       const signedTransaction = await Promise.race([
-        window.solana.signTransaction(transaction),
+        (async () => {
+          // Sign the transaction with Phantom
+          return await (window.solana as any).signTransaction(transaction);
+        })(),
         signingTimeout
-      ]);
+      ]) as any;
 
       const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: false,
@@ -341,14 +414,18 @@ export default function AdminPage() {
       if (recordResult.success) {
         // Refresh data to reflect the payment
         await loadData();
-        
+
+        // Update wallet balance
+        if (walletPublicKey) {
+          await updateWalletBalance(walletPublicKey);
+        }
+
         // Open explorer in new tab for verification
         if (recordResult.data.explorerUrl) {
           window.open(recordResult.data.explorerUrl, '_blank');
         }
 
-        // Show success message
-        alert(`✅ Successfully paid ${data.amount} SOL to @${data.username} for ${data.submissionCount} submissions!`);
+        alert(`Successfully paid ${data.amount} SOL to @${data.username} for ${data.submissionCount} submissions!`);
       } else {
         throw new Error(recordResult.error || 'Failed to record payment');
       }
@@ -356,140 +433,11 @@ export default function AdminPage() {
       console.error('Error executing aggregate payout:', err);
       const errorMessage = err.message || 'Failed to execute aggregate payout';
       setError(errorMessage);
-      alert(`❌ Payment failed: ${errorMessage}`);
-      
+      alert(`Payment failed: ${errorMessage}`);
+
       // Refresh wallet balance on error
-      if (window.solana?.publicKey) {
-        const connection = new (window as any).solanaWeb3.Connection(
-          'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
-        );
-        connection.getBalance(window.solana.publicKey).then((balance: number) => {
-          setAdminBalance(balance);
-        });
-      }
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  async function executePayout(submissionId: string, amount?: number) {
-    try {
-      setActionLoading(submissionId);
-      setError(null);
-
-      if (!adminWalletConnected || !adminWalletPubKey) {
-        throw new Error('Admin wallet not connected. Please connect your Phantom wallet.');
-      }
-
-      // Double-check wallet is still connected
-      if (!window.solana?.publicKey) {
-        throw new Error('Phantom wallet disconnected. Please reconnect your wallet.');
-      }
-
-      // First get payout details from API
-      const result = await callAdminApi('executePayout', { 
-        submissionId,
-        payoutAmount: amount 
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to prepare payout');
-      }
-
-      const { data } = result;
-
-      // Validate admin wallet balance with buffer
-      const requiredLamports = data.amountLamports;
-      const feeBuffer = 2000000; // 0.002 SOL buffer for fees
-      if (adminBalance < requiredLamports + feeBuffer) {
-        throw new Error(`Insufficient admin wallet balance. Have ${(adminBalance / 1000000000).toFixed(4)} SOL, need ${((requiredLamports + feeBuffer) / 1000000000).toFixed(4)} SOL (includes fees)`);
-      }
-
-      // Execute client-side transfer - this will trigger Phantom popup immediately
-      const connection = new (window as any).solanaWeb3.Connection(
-        'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5',
-        'confirmed'
-      );
-      
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      const transaction = new (window as any).solanaWeb3.Transaction({
-        blockhash,
-        lastValidBlockHeight,
-        feePayer: window.solana.publicKey,
-      }).add(
-        (window as any).solanaWeb3.SystemProgram.transfer({
-          fromPubkey: window.solana.publicKey,
-          toPubkey: new (window as any).solanaWeb3.PublicKey(data.recipient),
-          lamports: data.amountLamports,
-        })
-      );
-
-      // Add timeout to wallet signing
-      const signingTimeout = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Wallet signing timeout. Please try again.')), 60000);
-      });
-
-      // Sign transaction with Phantom wallet
-      const signedTransaction = await Promise.race([
-        window.solana.signTransaction(transaction),
-        signingTimeout
-      ]);
-
-      const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed'
-      });
-
-      // Confirm transaction with timeout
-      const confirmationTimeout = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Transaction confirmation timeout. Please check transaction manually.')), 30000);
-      });
-
-      await Promise.race([
-        connection.confirmTransaction({
-          signature,
-          blockhash,
-          lastValidBlockHeight,
-        }),
-        confirmationTimeout
-      ]);
-
-      // Record completed transaction
-      const recordResult = await callAdminApi('recordPayout', {
-        submissionId,
-        signature,
-        amount: data.amount,
-        recipient: data.recipient,
-        username: data.username
-      });
-
-      if (recordResult.success) {
-        // Update the data to reflect the payment
-        await loadData();
-        
-        // Open explorer in new tab for verification
-        if (recordResult.data.explorerUrl) {
-          window.open(recordResult.data.explorerUrl, '_blank');
-        }
-
-        alert(`✅ Successfully paid ${data.amount} SOL to @${data.username}!`);
-      } else {
-        throw new Error(recordResult.error || 'Failed to record payment');
-      }
-    } catch (err: any) {
-      console.error('Error executing payout:', err);
-      const errorMessage = err.message || 'Failed to execute payout';
-      setError(errorMessage);
-      alert(`❌ Payment failed: ${errorMessage}`);
-      
-      // Refresh wallet balance on error
-      if (window.solana?.publicKey) {
-        const connection = new (window as any).solanaWeb3.Connection(
-          'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
-        );
-        connection.getBalance(window.solana.publicKey).then((balance: number) => {
-          setAdminBalance(balance);
-        });
+      if (walletPublicKey) {
+        await updateWalletBalance(walletPublicKey);
       }
     } finally {
       setActionLoading(null);
@@ -512,54 +460,115 @@ export default function AdminPage() {
     }
   }
 
-  // Login form
-  if (!isAuthenticated) {
-    console.log('🔍 Showing login form - isAuthenticated:', isAuthenticated, 'loading:', loading);
+  // Show loading state before client-side mount
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin text-primary" />
+          <p className="text-muted-light">Loading admin panel...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Wallet connection screen (not connected or not admin)
+  if (!walletConnected || !isAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl bg-surface-light border border-border flex items-center justify-center mx-auto mb-6">
-              <Lock className="w-8 h-8 text-muted" />
+              <Wallet className="w-8 h-8 text-muted" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight mb-3">Admin Access</h1>
-            <p className="text-muted-light">Enter your admin password to continue</p>
+            <p className="text-muted-light">
+              {walletConnected
+                ? 'Verifying admin wallet...'
+                : 'Connect your admin wallet to continue'}
+            </p>
           </div>
 
-          <form onSubmit={(e) => { console.log('🔗 Login form submitted'); e.preventDefault(); handleLogin(e); }} className="space-y-4">
-            <div>
-              <label htmlFor="password" className="block text-sm text-muted mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => { console.log('🔗 Password input changed'); setPassword(e.target.value); }}
-                className="input-dark w-full"
-                placeholder="Enter admin password"
-                autoFocus
-              />
-            </div>
-
-            {loginError && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                <p className="text-red-400 text-sm">{loginError}</p>
+          {authError && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-red-400">Access Denied</p>
+                  <p className="text-red-300 text-sm mt-1">{authError}</p>
+                </div>
               </div>
-            )}
+            </div>
+          )}
 
-            <button
-              type="submit"
-              disabled={loading || !password}
-              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-              ) : (
-                'Login'
-              )}
-            </button>
-          </form>
+          {walletConnected && walletPublicKey && (
+            <div className="bg-surface/80 border border-border rounded-xl p-4 mb-6">
+              <p className="text-sm text-muted mb-1">Connected Wallet</p>
+              <p className="font-mono text-sm">
+                {walletPublicKey.slice(0, 8)}...{walletPublicKey.slice(-8)}
+              </p>
+              <p className="text-xs text-muted mt-2">
+                Balance: {(walletBalance / 1000000000).toFixed(4)} SOL
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {!walletConnected ? (
+              <button
+                onClick={connectWallet}
+                disabled={connecting}
+                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {connecting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Wallet className="w-5 h-5" />
+                    Connect Phantom Wallet
+                  </>
+                )}
+              </button>
+            ) : authChecking ? (
+              <div className="flex items-center justify-center gap-2 py-3 text-muted">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Verifying admin access...
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={verifyAdminAccess}
+                  disabled={authChecking}
+                  className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Retry Verification
+                </button>
+                <button
+                  onClick={disconnectWallet}
+                  className="w-full py-2.5 text-sm text-muted hover:text-white transition-colors"
+                >
+                  Disconnect Wallet
+                </button>
+              </>
+            )}
+          </div>
+
+          {!phantomInstalled && (
+            <p className="text-center text-sm text-muted mt-6">
+              Don&apos;t have Phantom?{' '}
+              <a
+                href="https://phantom.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Install it here
+              </a>
+            </p>
+          )}
         </div>
       </div>
     );
@@ -582,13 +591,10 @@ export default function AdminPage() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Admin Dashboard</h1>
           <button
-            onClick={() => {
-              setIsAuthenticated(false);
-              setStoredPassword(null);
-            }}
+            onClick={disconnectWallet}
             className="text-sm text-muted hover:text-white transition-colors"
           >
-            Logout
+            Disconnect
           </button>
         </div>
 
@@ -617,37 +623,19 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-2">
               <p className="text-muted text-sm">Admin Wallet</p>
               <div className="flex items-center gap-2">
-                {adminWalletConnected ? (
-                  <>
-                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                    <span className="text-xs text-green-400 font-medium">CONNECTED</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                    <span className="text-xs text-red-400 font-medium">NOT CONNECTED</span>
-                  </>
-                )}
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <span className="text-xs text-green-400 font-medium">CONNECTED</span>
               </div>
             </div>
             <p className="text-lg font-bold mb-1">
-              {adminWalletPubKey 
-                ? `${adminWalletPubKey.slice(0, 4)}...${adminWalletPubKey.slice(-4)}`
+              {walletPublicKey
+                ? `${walletPublicKey.slice(0, 4)}...${walletPublicKey.slice(-4)}`
                 : 'Not Connected'
               }
             </p>
             <p className="text-xs text-muted">
-              Balance: {(adminBalance / 1000000000).toFixed(4)} SOL
+              Balance: {(walletBalance / 1000000000).toFixed(4)} SOL
             </p>
-            {!adminWalletConnected && (
-              <button
-                onClick={connectWallet}
-                disabled={connecting}
-                className="mt-2 bg-primary text-black px-3 py-1 text-xs rounded-lg font-semibold hover:bg-primary/80 disabled:opacity-50"
-              >
-                {connecting ? 'Connecting...' : 'Connect Phantom'}
-              </button>
-            )}
           </div>
         </div>
 
@@ -685,6 +673,158 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {/* Dashboard Tab */}
+        {tab === 'dashboard' && (
+          <div className="bg-surface/80 border border-border rounded-2xl p-6 sm:p-8">
+            <h3 className="text-lg font-semibold mb-6">Recent Activity</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-surface-light/50 rounded-xl p-5 border border-border">
+                <p className="text-muted text-sm mb-2">Approved Submissions</p>
+                <p className="text-3xl font-bold text-green-400">{stats.totalApproved}</p>
+              </div>
+              <div className="bg-surface-light/50 rounded-xl p-5 border border-border">
+                <p className="text-muted text-sm mb-2">Paid Out</p>
+                <p className="text-3xl font-bold text-blue-400">{stats.totalPaid}</p>
+              </div>
+              <div className="bg-surface-light/50 rounded-xl p-5 border border-border">
+                <p className="text-muted text-sm mb-2">Pending Payment</p>
+                <p className="text-3xl font-bold text-yellow-400">{stats.pendingPayment}</p>
+              </div>
+              <div className="bg-surface-light/50 rounded-xl p-5 border border-border">
+                <p className="text-muted text-sm mb-2">Funding Balance</p>
+                <p className="text-3xl font-bold">{(stats.fundingBalance / 1000000000).toFixed(4)} SOL</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Submissions Tab */}
+        {tab === 'submissions' && (
+          <div className="bg-surface/80 border border-border rounded-2xl p-6 sm:p-8">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Pending Submissions</h3>
+              <button
+                onClick={loadData}
+                disabled={loading}
+                className="text-sm text-muted hover:text-white transition-colors flex items-center gap-2"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Refresh
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {submissions
+                .filter((s) => s.status === 'pending')
+                .map((submission) => (
+                  <div
+                    key={submission.id}
+                    className="bg-surface-light/50 p-5 rounded-xl border border-border hover:border-border-light transition-all"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <p className="font-medium">@{submission.users?.x_username || 'Unknown'}</p>
+                        <a
+                          href={submission.tweet_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline"
+                        >
+                          View Tweet
+                        </a>
+                      </div>
+                      <span className="bg-yellow-500/10 text-yellow-400 text-xs px-2 py-1 rounded-full font-medium">
+                        PENDING
+                      </span>
+                    </div>
+
+                    {selectedSubmission?.id === submission.id ? (
+                      <div className="mt-4 space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm text-muted mb-1">Likes</label>
+                            <input
+                              type="number"
+                              value={engagementData.likes}
+                              onChange={(e) => setEngagementData({...engagementData, likes: parseInt(e.target.value) || 0})}
+                              className="input-dark w-full"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-muted mb-1">Reposts</label>
+                            <input
+                              type="number"
+                              value={engagementData.reposts}
+                              onChange={(e) => setEngagementData({...engagementData, reposts: parseInt(e.target.value) || 0})}
+                              className="input-dark w-full"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-muted mb-1">Replies</label>
+                            <input
+                              type="number"
+                              value={engagementData.replies}
+                              onChange={(e) => setEngagementData({...engagementData, replies: parseInt(e.target.value) || 0})}
+                              className="input-dark w-full"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => approveSubmission(submission.id)}
+                            disabled={actionLoading === submission.id}
+                            className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 text-white font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                          >
+                            {actionLoading === submission.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4" />
+                            )}
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => rejectSubmission(submission.id)}
+                            disabled={actionLoading === submission.id}
+                            className="flex-1 bg-red-600 hover:bg-red-500 disabled:bg-red-800 text-white font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                          >
+                            {actionLoading === submission.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4" />
+                            )}
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedSubmission(null);
+                              setEngagementData({ likes: 0, reposts: 0, replies: 0 });
+                            }}
+                            className="px-4 py-2 text-muted hover:text-white transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedSubmission(submission)}
+                        className="mt-3 text-sm text-primary hover:underline"
+                      >
+                        Review Submission
+                      </button>
+                    )}
+                  </div>
+                ))}
+              {submissions.filter((s) => s.status === 'pending').length === 0 && (
+                <div className="text-center py-16 bg-surface/50 rounded-2xl border border-border border-dashed">
+                  <CheckCircle className="w-10 h-10 text-muted mx-auto mb-3" />
+                  <p className="text-muted">No pending submissions</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Payout Tab */}
         {tab === 'payout' && (
           <div className="bg-surface/80 border border-border rounded-2xl p-6 sm:p-8">
@@ -694,19 +834,16 @@ export default function AdminPage() {
                 <p className="text-sm text-muted mt-1">Total SOL owed per user across all approved submissions</p>
               </div>
               <div className="text-sm text-muted">
-                {adminWalletConnected 
-                  ? "Click 'Pay' to send SOL instantly" 
-                  : "Connect admin wallet to enable payouts"
-                }
+                Click &apos;Pay&apos; to send SOL instantly
               </div>
             </div>
-             
+
             <div className="space-y-4">
               {aggregatedPayouts.length > 0 ? (
                 aggregatedPayouts.map((payout: any) => {
                   const amountSol = payout.totalAmountLamports / 1000000000;
                   const loadingId = `aggregate-${payout.userId}`;
-                   
+
                   return (
                     <div
                       key={payout.userId}
@@ -727,30 +864,22 @@ export default function AdminPage() {
                             {payout.payoutAddress.slice(0, 8)}...{payout.payoutAddress.slice(-8)}
                           </p>
                         </div>
-                        
+
                         <div className="text-center">
                           <p className="text-2xl font-bold text-green-400">{amountSol.toFixed(4)} SOL</p>
                           <p className="text-xs text-muted mt-1">Total amount owed</p>
                         </div>
-                        
+
                         <div className="flex gap-2">
                           <button
                             onClick={() => executeAggregatePayout(payout.userId, payout)}
-                            disabled={
-                              actionLoading === loadingId || 
-                              !adminWalletConnected
-                            }
+                            disabled={actionLoading === loadingId}
                             className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
                           >
                             {actionLoading === loadingId ? (
                               <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
                                 Paying...
-                              </>
-                            ) : !adminWalletConnected ? (
-                              <>
-                                <Wallet className="w-4 h-4" />
-                                Connect Wallet
                               </>
                             ) : (
                               <>
@@ -781,7 +910,7 @@ export default function AdminPage() {
                     .filter((s) => s.status === 'approved')
                     .map((submission) => {
                       const calculatedAmount = ((submission.final_score || 0) * 1000000) / 1000000000;
-                       
+
                       return (
                         <div
                           key={submission.id}
