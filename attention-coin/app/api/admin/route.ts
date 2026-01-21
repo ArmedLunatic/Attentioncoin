@@ -6,7 +6,6 @@ import {
   getExplorerUrl,
   getFundingBalance
 } from '@/lib/solana';
-import { getExplorerUrl as getAdminExplorerUrl } from '@/lib/admin-wallet';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -237,7 +236,7 @@ export async function POST(req: NextRequest) {
             signature,
             amount,
             recipient,
-            explorerUrl: getAdminExplorerUrl(signature)
+            explorerUrl: getExplorerUrl(signature)
           }
         });
       }

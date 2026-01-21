@@ -3,6 +3,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, AlertCircle, Loader2, Lock, Wallet } from 'lucide-react';
 
+// Add global type for Phantom wallet
+declare global {
+  interface Window {
+    solana?: any;
+    solanaWeb3: any;
+  }
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -102,10 +110,10 @@ export default function AdminPage() {
       setAdminWalletPubKey(window.solana.publicKey.toString());
       
       // Get balance
-      const connection = new (window as any).solanaWeb3.Connection(
+      const connection = new window.solanaWeb3.Connection(
         'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
       );
-      connection.getBalance(window.solana.publicKey).then(balance => {
+      connection.getBalance(window.solana.publicKey).then((balance: number) => {
         setAdminBalance(balance);
       });
     } else {
@@ -136,7 +144,7 @@ export default function AdminPage() {
       setAdminBalance(balance);
       
       console.log('✅ Admin wallet connected:', response.publicKey.toString());
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to connect wallet:', error);
       alert('Failed to connect wallet: ' + error.message);
     } finally {

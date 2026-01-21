@@ -3,7 +3,6 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'sonner';
 import { UserProvider } from '@/components/WalletProvider';
-import { AdminWalletProvider } from '@/contexts/AdminWalletContext';
 import Header from '@/components/Header';
 import './globals.css';
 
@@ -44,12 +43,11 @@ export default function RootLayout({
           aria-hidden="true"
         />
 
-        <AdminWalletProvider>
-          <UserProvider>
-            <Header />
-            <main className="pt-[72px] relative z-10">
-              {children}
-            </main>
+        <UserProvider>
+          <Header />
+          <main className="pt-[72px] relative z-10">
+            {children}
+          </main>
             <a
               href="https://x.com/i/communities/2013663619725365292"
               target="_blank"
@@ -71,7 +69,6 @@ export default function RootLayout({
               }}
             />
           </UserProvider>
-        </AdminWalletProvider>
       </body>
     </html>
   );
