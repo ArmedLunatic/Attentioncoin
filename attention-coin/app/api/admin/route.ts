@@ -120,6 +120,104 @@ export async function POST(req: Request) {
           }
         });
 
+      case 'approve':
+        // Verify admin access
+        const approveAdminWallet = process.env.NEXT_PUBLIC_ADMIN_WALLET;
+        if (!approveAdminWallet || body.publicKey?.toLowerCase() !== approveAdminWallet.toLowerCase()) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        const { submissionId, engagementData } = data;
+        if (!submissionId) {
+          return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
+        }
+
+        // Calculate score based on engagement data
+        const likes = engagementData?.likes || 0;
+        const reposts = engagementData?.reposts || 0;
+        const replies = engagementData?.replies || 0;
+
+        // Scoring: like=1, repost=3, reply=2 (configurable weights)
+        const baseScore = (likes * 1) + (reposts * 3) + (replies * 2);
+        const finalScore = baseScore; // Can apply multipliers here
+
+        // Update submission status to approved
+        const { error: approveError } = await supabase
+          .from('submissions')
+          .update({
+            status: 'approved',
+            approved_at: new Date().toISOString(),
+            likes,
+            reposts,
+            replies,
+            base_score: baseScore,
+            final_score: finalScore
+          })
+          .eq('id', submissionId);
+
+        if (approveError) {
+          console.error('Error approving submission:', approveError);
+          return NextResponse.json({ error: 'Failed to approve submission' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true });
+
+      case 'reject':
+        // Verify admin access
+        const rejectAdminWallet = process.env.NEXT_PUBLIC_ADMIN_WALLET;
+        if (!rejectAdminWallet || body.publicKey?.toLowerCase() !== rejectAdminWallet.toLowerCase()) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        const { submissionId: rejectId } = data;
+        if (!rejectId) {
+          return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
+        }
+
+        // Update submission status to rejected
+        const { error: rejectError } = await supabase
+          .from('submissions')
+          .update({
+            status: 'rejected',
+            rejection_reason: 'Rejected by admin'
+          })
+          .eq('id', rejectId);
+
+        if (rejectError) {
+          console.error('Error rejecting submission:', rejectError);
+          return NextResponse.json({ error: 'Failed to reject submission' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true });
+
+      case 'markPaid':
+        // Verify admin access
+        const markPaidAdminWallet = process.env.NEXT_PUBLIC_ADMIN_WALLET;
+        if (!markPaidAdminWallet || body.publicKey?.toLowerCase() !== markPaidAdminWallet.toLowerCase()) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        const { submissionId: paidId } = data;
+        if (!paidId) {
+          return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
+        }
+
+        // Mark submission as paid
+        const { error: paidError } = await supabase
+          .from('submissions')
+          .update({
+            paid: true,
+            paid_at: new Date().toISOString()
+          })
+          .eq('id', paidId);
+
+        if (paidError) {
+          console.error('Error marking as paid:', paidError);
+          return NextResponse.json({ error: 'Failed to mark as paid' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true });
+
       case 'getAggregatedPayouts':
         // Verify admin access first using environment variable
         const payoutAdminWallet = process.env.NEXT_PUBLIC_ADMIN_WALLET;
@@ -127,12 +225,68 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        // Get aggregated payouts for all users
-        const { data: payoutData, error: payoutError } = await supabase.rpc('get_aggregated_payouts');
+        // Get all approved submissions that haven't been paid yet, aggregated by user
+        const { data: unpaidSubmissions, error: unpaidError } = await supabase
+          .from('submissions')
+          .select(`
+            id,
+            user_id,
+            final_score,
+            users (
+              x_username,
+              payout_address,
+              wallet_address
+            )
+          `)
+          .eq('status', 'approved')
+          .eq('paid', false);
+
+        if (unpaidError) {
+          console.error('Error fetching unpaid submissions:', unpaidError);
+          return NextResponse.json({ error: 'Failed to fetch unpaid submissions' }, { status: 500 });
+        }
+
+        // Aggregate by user
+        const userPayouts = new Map();
+
+        for (const submission of (unpaidSubmissions || [])) {
+          const userId = submission.user_id;
+          const score = submission.final_score || 0;
+          const userInfo = submission.users as any;
+          const username = userInfo?.x_username || 'Unknown';
+          const payoutAddress = userInfo?.payout_address || userInfo?.wallet_address;
+
+          if (!userPayouts.has(userId)) {
+            userPayouts.set(userId, {
+              userId,
+              username,
+              payoutAddress,
+              totalScore: 0,
+              submissionCount: 0,
+              submissionIds: []
+            });
+          }
+
+          const userPayout = userPayouts.get(userId);
+          userPayout.totalScore += score;
+          userPayout.submissionCount += 1;
+          userPayout.submissionIds.push(submission.id);
+        }
+
+        // Convert map to array and calculate lamports (1 point = 1 lamport for simplicity)
+        const aggregatedPayouts = Array.from(userPayouts.values()).map(payout => ({
+          userId: payout.userId,
+          username: payout.username,
+          payoutAddress: payout.payoutAddress,
+          totalScore: payout.totalScore,
+          totalAmountLamports: Math.floor(payout.totalScore * 1000000), // Convert score to lamports
+          submissionCount: payout.submissionCount,
+          submissionIds: payout.submissionIds
+        }));
 
         return NextResponse.json({
           success: true,
-          data: payoutData || []
+          data: aggregatedPayouts
         });
 
       case 'executeAggregatePayout':
@@ -148,7 +302,7 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
         }
 
-        // Get user info and aggregated payout data
+        // Get user info
         const { data: user, error: userFetchError } = await supabase
           .from('users')
           .select('x_username, payout_address, wallet_address')
@@ -159,16 +313,28 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        // Get aggregated payout amount for this user
-        const { data: aggregatedData, error: aggError } = await supabase.rpc('get_user_aggregated_payout', {
-          user_id_param: userId
-        });
+        // Get all unpaid approved submissions for this user
+        const { data: userSubmissions, error: submissionsError } = await supabase
+          .from('submissions')
+          .select('id, final_score')
+          .eq('user_id', userId)
+          .eq('status', 'approved')
+          .eq('paid', false);
 
-        if (aggError || !aggregatedData || aggregatedData.length === 0) {
+        if (submissionsError) {
+          console.error('Error fetching user submissions:', submissionsError);
+          return NextResponse.json({ error: 'Failed to fetch user submissions' }, { status: 500 });
+        }
+
+        if (!userSubmissions || userSubmissions.length === 0) {
           return NextResponse.json({ error: 'No pending payouts for user' }, { status: 400 });
         }
 
-        const payoutInfo = aggregatedData[0];
+        // Calculate total amount
+        const totalScore = userSubmissions.reduce((sum, sub) => sum + (sub.final_score || 0), 0);
+        const amountLamports = Math.floor(totalScore * 1000000); // Convert score to lamports
+        const userSubmissionIds = userSubmissions.map(sub => sub.id);
+
         const recipientAddress = user.payout_address || user.wallet_address;
 
         // Validate recipient wallet exists
@@ -192,7 +358,6 @@ export async function POST(req: Request) {
         }
 
         // Validate amount is positive
-        const amountLamports = Number(payoutInfo.total_amount_lamports);
         if (isNaN(amountLamports) || amountLamports <= 0) {
           console.error('[PAYOUT SKIPPED] Invalid payout amount:', { userId, amountLamports, username: user.x_username });
           return NextResponse.json(
@@ -208,7 +373,8 @@ export async function POST(req: Request) {
             amountLamports,
             amount: amountLamports / 1000000000,
             username: user.x_username,
-            submissionIds: payoutInfo.submission_ids
+            submissionIds: userSubmissionIds,
+            submissionCount: userSubmissions.length
           }
         });
 
