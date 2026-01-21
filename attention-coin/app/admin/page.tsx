@@ -42,7 +42,7 @@ export default function AdminPage() {
   const [storedPassword, setStoredPassword] = useState<string | null>(null);
 
   // Admin wallet context - only works on admin page
-  const { isAdminWallet } = useAdminWallet();
+  const { isAdminAuthenticated } = useAdminWallet();
   const simpleWallet = useSimpleWallet();
 
   const callAdminApi = useCallback(async (action: string, data: Record<string, any> = {}) => {

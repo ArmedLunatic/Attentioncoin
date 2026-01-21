@@ -1,29 +1,20 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useWallet, WalletContextState } from '@solana/wallet-adapter-react';
 
 interface AdminWalletContextType {
-  isAdminWallet: boolean;
-  adminWallet: WalletContextState | null;
   isAdminAuthenticated: boolean;
 }
 
 const AdminWalletContext = createContext<AdminWalletContextType | undefined>(undefined);
 
 export function AdminWalletProvider({ children }: { children: ReactNode }) {
-  const wallet = useWallet();
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-
-  // Only allow wallet access on admin page and when authenticated
-  const isAdminWallet = typeof window !== 'undefined' && 
-    window.location.pathname === '/admin' && 
-    isAdminAuthenticated;
 
   useEffect(() => {
     // Check if we're on admin page and user is authenticated
     const checkAdminAuth = () => {
-      if (window.location.pathname === '/admin') {
+      if (typeof window !== 'undefined' && window.location.pathname === '/admin') {
         // This will be set by the admin page after successful login
         const adminAuth = sessionStorage.getItem('admin_authenticated');
         setIsAdminAuthenticated(adminAuth === 'true');
@@ -31,7 +22,7 @@ export function AdminWalletProvider({ children }: { children: ReactNode }) {
         setIsAdminAuthenticated(false);
       }
     };
-
+    
     checkAdminAuth();
     
     // Listen for storage changes (in case admin logs in/out in another tab)
@@ -39,13 +30,13 @@ export function AdminWalletProvider({ children }: { children: ReactNode }) {
       checkAdminAuth();
     };
     
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
+    }
   }, []);
 
   const contextValue: AdminWalletContextType = {
-    isAdminWallet,
-    adminWallet: isAdminWallet ? wallet : null,
     isAdminAuthenticated,
   };
 
