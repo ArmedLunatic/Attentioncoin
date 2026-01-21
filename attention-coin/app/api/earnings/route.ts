@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { calculateEligibleEarnings, getPoolStats } from '@/lib/payout-service';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
