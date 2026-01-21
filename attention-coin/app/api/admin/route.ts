@@ -176,58 +176,164 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      case 'recordPayout': {
-        if (!submissionId) {
-          return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
-        }
-
-        // Create reward record with provided data
-        const { signature, amount, recipient, username } = body;
-        
-        if (!signature || !amount || !recipient) {
-          return NextResponse.json({ error: 'Missing payout data' }, { status: 400 });
-        }
-
-        // Get user and submission details
-        const { data: submission, error: submissionError } = await supabase
+      case 'getAggregatedPayouts': {
+        // Get all approved submissions grouped by user
+        const { data: submissions } = await supabase
           .from('submissions')
-          .select('user_id, final_score')
-          .eq('id', submissionId)
-          .single();
+          .select(`
+            id,
+            user_id,
+            final_score,
+            users!inner(
+              id,
+              x_username,
+              payout_address,
+              wallet_address
+            )
+          `)
+          .eq('status', 'approved')
+          .gt('final_score', 0)
+          .order('created_at', { ascending: false });
 
-        if (submissionError || !submission) {
-          return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
-        }
-
-        // Create reward record
-        const { error: rewardError } = await supabase
-          .from('rewards')
-          .insert({
-            user_id: submission.user_id,
-            period_date: new Date().toISOString().split('T')[0],
-            total_score: submission.final_score || 0,
-            amount_lamports: Math.round(amount * LAMPORTS_PER_SOL),
-            status: 'completed',
-            tx_signature: signature,
+        if (!submissions) {
+          return NextResponse.json({
+            success: true,
+            data: []
           });
-
-        if (rewardError) {
-          console.error('Failed to create reward record:', rewardError);
-          return NextResponse.json({ error: 'Failed to record payout' }, { status: 500 });
         }
 
-        // Update submission status to paid
+        // Aggregate by user
+        const userAggregates: Record<string, {
+          userId: string;
+          username: string;
+          payoutAddress: string;
+          totalScore: number;
+          submissionIds: string[];
+          totalAmountLamports: number;
+          submissionCount: number;
+        }> = {};
+
+        for (const sub of submissions) {
+          const userId = sub.user_id;
+          const users = sub.users as any; // Cast to any to access nested properties
+          const payoutAddress = users.payout_address || users.wallet_address;
+          
+          // Skip users without payout address
+          if (!payoutAddress) {
+            continue;
+          }
+
+          if (!userAggregates[userId]) {
+            userAggregates[userId] = {
+              userId,
+              username: users.x_username || 'Unknown',
+              payoutAddress,
+              totalScore: 0,
+              submissionIds: [],
+              totalAmountLamports: 0,
+              submissionCount: 0
+            };
+          }
+
+          const submissionAmount = Math.round((sub.final_score || 0) * 1000000);
+          userAggregates[userId].totalScore += sub.final_score || 0;
+          userAggregates[userId].submissionIds.push(sub.id);
+          userAggregates[userId].totalAmountLamports += submissionAmount;
+          userAggregates[userId].submissionCount++;
+        }
+
+        const aggregatedPayouts = Object.values(userAggregates);
+
+        return NextResponse.json({
+          success: true,
+          data: aggregatedPayouts
+        });
+      }
+
+      case 'executeAggregatePayout': {
+        const { userId } = body;
+        
+        if (!userId) {
+          return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+        }
+
+        // Get all approved submissions for this user
+        const { data: submissions, error: submissionsError } = await supabase
+          .from('submissions')
+          .select(`
+            id,
+            final_score,
+            users!inner(
+              id,
+              x_username,
+              payout_address,
+              wallet_address
+            )
+          `)
+          .eq('user_id', userId)
+          .eq('status', 'approved')
+          .gt('final_score', 0);
+
+        if (submissionsError || !submissions || submissions.length === 0) {
+          return NextResponse.json({ error: 'No approved submissions found for user' }, { status: 404 });
+        }
+
+        const users = submissions[0].users as any; // Cast to any to access nested properties
+        const payoutAddress = users.payout_address || users.wallet_address;
+
+        if (!payoutAddress) {
+          return NextResponse.json({ error: 'User has no payout address configured' }, { status: 400 });
+        }
+
+        // Calculate total amount
+        let totalLamports = 0;
+        const submissionIds: string[] = [];
+        
+        for (const sub of submissions) {
+          const amount = Math.round((sub.final_score || 0) * 1000000);
+          totalLamports += amount;
+          submissionIds.push(sub.id);
+        }
+
+        if (totalLamports <= 0) {
+          return NextResponse.json({ error: 'Total payout amount must be positive' }, { status: 400 });
+        }
+
+        return NextResponse.json({
+          success: true,
+          clientSideRequired: true,
+          data: {
+            recipient: payoutAddress,
+            amount: totalLamports / LAMPORTS_PER_SOL,
+            amountLamports: totalLamports,
+            username: users.x_username,
+            userId,
+            submissionIds,
+            submissionCount: submissions.length
+          }
+        });
+      }
+
+      case 'recordAggregatePayout': {
+        const { signature, amount, recipient, username, userId, submissionIds } = body;
+        
+        if (!signature || !amount || !recipient || !userId || !submissionIds) {
+          return NextResponse.json({ error: 'Missing aggregate payout data' }, { status: 400 });
+        }
+
+        // Mark all submissions as paid
         const { error: updateError } = await supabase
           .from('submissions')
           .update({ 
             status: 'paid',
-            approved_at: new Date().toISOString()
+            paid_at: new Date().toISOString()
           })
-          .eq('id', submissionId);
+          .eq('user_id', userId)
+          .in('id', submissionIds);
 
         if (updateError) {
-          console.error('Failed to update submission status:', updateError);
-          // Don't fail the response since the reward was recorded
+          console.error('Failed to update submissions status:', updateError);
+          return NextResponse.json({ error: 'Failed to update submissions' }, { status: 500 });
         }
 
         return NextResponse.json({ 
@@ -236,6 +342,8 @@ export async function POST(req: NextRequest) {
             signature,
             amount,
             recipient,
+            userId,
+            submissionCount: submissionIds.length,
             explorerUrl: getExplorerUrl(signature)
           }
         });

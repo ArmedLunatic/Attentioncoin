@@ -35,7 +35,7 @@ export default function SimpleTest() {
         alert('Connected! Public key: ' + response.publicKey.toString());
       } catch (error) {
         console.error('Connection failed:', error);
-        alert('Connection failed: ' + error.message);
+        alert('Connection failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
       }
     }
   };

@@ -24,6 +24,7 @@ export default function AdminPage() {
     fundingBalance: 0,
   });
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [aggregatedPayouts, setAggregatedPayouts] = useState<any[]>([]);
   const [tab, setTab] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -77,11 +78,18 @@ export default function AdminPage() {
       setLoading(true);
       setError(null);
 
-      const result = await callAdminApi('getStats');
+      const [statsResult, payoutsResult] = await Promise.all([
+        callAdminApi('getStats'),
+        callAdminApi('getAggregatedPayouts')
+      ]);
 
-      if (result.success) {
-        setStats(result.data.stats);
-        setSubmissions(result.data.submissions);
+      if (statsResult.success) {
+        setStats(statsResult.data.stats);
+        setSubmissions(statsResult.data.submissions);
+      }
+
+      if (payoutsResult.success) {
+        setAggregatedPayouts(payoutsResult.data);
       }
     } catch (err: any) {
       console.error('Error loading data:', err);
@@ -241,13 +249,141 @@ export default function AdminPage() {
     }
   }
 
+  async function executeAggregatePayout(userId: string, aggregatedData: any) {
+    try {
+      setActionLoading(`aggregate-${userId}`);
+      setError(null);
+
+      if (!adminWalletConnected || !adminWalletPubKey) {
+        throw new Error('Admin wallet not connected. Please connect your Phantom wallet.');
+      }
+
+      // Double-check wallet is still connected
+      if (!window.solana?.publicKey) {
+        throw new Error('Phantom wallet disconnected. Please reconnect your wallet.');
+      }
+
+      // Get payout details from API
+      const result = await callAdminApi('executeAggregatePayout', { userId });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to prepare aggregate payout');
+      }
+
+      const { data } = result;
+
+      // Validate admin wallet balance with buffer
+      const requiredLamports = data.amountLamports;
+      const feeBuffer = 2000000; // 0.002 SOL buffer for fees
+      if (adminBalance < requiredLamports + feeBuffer) {
+        throw new Error(`Insufficient admin wallet balance. Have ${(adminBalance / 1000000000).toFixed(4)} SOL, need ${((requiredLamports + feeBuffer) / 1000000000).toFixed(4)} SOL (includes fees)`);
+      }
+
+      // Execute client-side transfer - this will trigger Phantom popup immediately
+      const connection = new (window as any).solanaWeb3.Connection(
+        'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5',
+        'confirmed'
+      );
+      
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      const transaction = new (window as any).solanaWeb3.Transaction({
+        blockhash,
+        lastValidBlockHeight,
+        feePayer: window.solana.publicKey,
+      }).add(
+        (window as any).solanaWeb3.SystemProgram.transfer({
+          fromPubkey: window.solana.publicKey,
+          toPubkey: new (window as any).solanaWeb3.PublicKey(data.recipient),
+          lamports: data.amountLamports,
+        })
+      );
+
+      // Add timeout to wallet signing
+      const signingTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Wallet signing timeout. Please try again.')), 60000);
+      });
+
+      // Sign transaction with Phantom wallet - this opens the wallet popup immediately
+      const signedTransaction = await Promise.race([
+        window.solana.signTransaction(transaction),
+        signingTimeout
+      ]);
+
+      const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed'
+      });
+
+      // Confirm transaction with timeout
+      const confirmationTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Transaction confirmation timeout. Please check the transaction manually.')), 30000);
+      });
+
+      await Promise.race([
+        connection.confirmTransaction({
+          signature,
+          blockhash,
+          lastValidBlockHeight,
+        }),
+        confirmationTimeout
+      ]);
+
+      // Record completed transaction
+      const recordResult = await callAdminApi('recordAggregatePayout', {
+        signature,
+        amount: data.amount,
+        recipient: data.recipient,
+        username: data.username,
+        userId,
+        submissionIds: data.submissionIds
+      });
+
+      if (recordResult.success) {
+        // Refresh data to reflect the payment
+        await loadData();
+        
+        // Open explorer in new tab for verification
+        if (recordResult.data.explorerUrl) {
+          window.open(recordResult.data.explorerUrl, '_blank');
+        }
+
+        // Show success message
+        alert(`✅ Successfully paid ${data.amount} SOL to @${data.username} for ${data.submissionCount} submissions!`);
+      } else {
+        throw new Error(recordResult.error || 'Failed to record payment');
+      }
+    } catch (err: any) {
+      console.error('Error executing aggregate payout:', err);
+      const errorMessage = err.message || 'Failed to execute aggregate payout';
+      setError(errorMessage);
+      alert(`❌ Payment failed: ${errorMessage}`);
+      
+      // Refresh wallet balance on error
+      if (window.solana?.publicKey) {
+        const connection = new (window as any).solanaWeb3.Connection(
+          'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
+        );
+        connection.getBalance(window.solana.publicKey).then((balance: number) => {
+          setAdminBalance(balance);
+        });
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function executePayout(submissionId: string, amount?: number) {
     try {
       setActionLoading(submissionId);
       setError(null);
 
       if (!adminWalletConnected || !adminWalletPubKey) {
-        throw new Error('Admin wallet not connected');
+        throw new Error('Admin wallet not connected. Please connect your Phantom wallet.');
+      }
+
+      // Double-check wallet is still connected
+      if (!window.solana?.publicKey) {
+        throw new Error('Phantom wallet disconnected. Please reconnect your wallet.');
       }
 
       // First get payout details from API
@@ -262,64 +398,99 @@ export default function AdminPage() {
 
       const { data } = result;
 
-      // Check if client-side signing is required
-      if (result.clientSideRequired) {
-        // Validate admin wallet balance
-        const requiredLamports = data.amountLamports;
-        if (adminBalance < requiredLamports + 1000000) { // Add 0.001 SOL buffer
-          throw new Error(`Insufficient admin wallet balance. Have ${(adminBalance / 1000000000).toFixed(4)} SOL, need ${(requiredLamports / 1000000000).toFixed(4)} SOL`);
-        }
+      // Validate admin wallet balance with buffer
+      const requiredLamports = data.amountLamports;
+      const feeBuffer = 2000000; // 0.002 SOL buffer for fees
+      if (adminBalance < requiredLamports + feeBuffer) {
+        throw new Error(`Insufficient admin wallet balance. Have ${(adminBalance / 1000000000).toFixed(4)} SOL, need ${((requiredLamports + feeBuffer) / 1000000000).toFixed(4)} SOL (includes fees)`);
+      }
 
-        // Execute client-side transfer - this will trigger Phantom popup
-        const connection = new (window as any).solanaWeb3.Connection(
-          'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
-        );
-        
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        const transaction = new (window as any).solanaWeb3.Transaction({
+      // Execute client-side transfer - this will trigger Phantom popup immediately
+      const connection = new (window as any).solanaWeb3.Connection(
+        'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5',
+        'confirmed'
+      );
+      
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      const transaction = new (window as any).solanaWeb3.Transaction({
+        blockhash,
+        lastValidBlockHeight,
+        feePayer: window.solana.publicKey,
+      }).add(
+        (window as any).solanaWeb3.SystemProgram.transfer({
+          fromPubkey: window.solana.publicKey,
+          toPubkey: new (window as any).solanaWeb3.PublicKey(data.recipient),
+          lamports: data.amountLamports,
+        })
+      );
+
+      // Add timeout to wallet signing
+      const signingTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Wallet signing timeout. Please try again.')), 60000);
+      });
+
+      // Sign transaction with Phantom wallet
+      const signedTransaction = await Promise.race([
+        window.solana.signTransaction(transaction),
+        signingTimeout
+      ]);
+
+      const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed'
+      });
+
+      // Confirm transaction with timeout
+      const confirmationTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Transaction confirmation timeout. Please check transaction manually.')), 30000);
+      });
+
+      await Promise.race([
+        connection.confirmTransaction({
+          signature,
           blockhash,
           lastValidBlockHeight,
-          feePayer: window.solana.publicKey,
-        }).add(
-          (window as any).solanaWeb3.SystemProgram.transfer({
-            fromPubkey: window.solana.publicKey,
-            toPubkey: new (window as any).solanaWeb3.PublicKey(data.recipient),
-            lamports: data.amountLamports,
-          })
-        );
+        }),
+        confirmationTimeout
+      ]);
 
-        // Sign transaction with Phantom wallet
-        const signedTransaction = await window.solana.signTransaction(transaction);
-        const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+      // Record completed transaction
+      const recordResult = await callAdminApi('recordPayout', {
+        submissionId,
+        signature,
+        amount: data.amount,
+        recipient: data.recipient,
+        username: data.username
+      });
 
-        // Record completed transaction
-        const recordResult = await callAdminApi('recordPayout', {
-          submissionId,
-          signature,
-          amount: data.amount,
-          recipient: data.recipient,
-          username: data.username
-        });
-
-        if (recordResult.success) {
-          // Update the data to reflect the payment
-          await loadData();
-          
-          // Open explorer in new tab for verification
-          if (recordResult.data.explorerUrl) {
-            window.open(recordResult.data.explorerUrl, '_blank');
-          }
-        }
-      } else {
-        // Fallback to server-side (shouldn't happen with new implementation)
-        if (data.explorerUrl) {
-          window.open(data.explorerUrl, '_blank');
-        }
+      if (recordResult.success) {
+        // Update the data to reflect the payment
         await loadData();
+        
+        // Open explorer in new tab for verification
+        if (recordResult.data.explorerUrl) {
+          window.open(recordResult.data.explorerUrl, '_blank');
+        }
+
+        alert(`✅ Successfully paid ${data.amount} SOL to @${data.username}!`);
+      } else {
+        throw new Error(recordResult.error || 'Failed to record payment');
       }
     } catch (err: any) {
       console.error('Error executing payout:', err);
-      setError(err.message || 'Failed to execute payout');
+      const errorMessage = err.message || 'Failed to execute payout';
+      setError(errorMessage);
+      alert(`❌ Payment failed: ${errorMessage}`);
+      
+      // Refresh wallet balance on error
+      if (window.solana?.publicKey) {
+        const connection = new (window as any).solanaWeb3.Connection(
+          'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
+        );
+        connection.getBalance(window.solana.publicKey).then((balance: number) => {
+          setAdminBalance(balance);
+        });
+      }
     } finally {
       setActionLoading(null);
     }
@@ -518,7 +689,10 @@ export default function AdminPage() {
         {tab === 'payout' && (
           <div className="bg-surface/80 border border-border rounded-2xl p-6 sm:p-8">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold">Approved Payouts</h3>
+              <div>
+                <h3 className="text-lg font-semibold">Aggregated Payouts</h3>
+                <p className="text-sm text-muted mt-1">Total SOL owed per user across all approved submissions</p>
+              </div>
               <div className="text-sm text-muted">
                 {adminWalletConnected 
                   ? "Click 'Pay' to send SOL instantly" 
@@ -527,56 +701,48 @@ export default function AdminPage() {
               </div>
             </div>
              
-            <div className="space-y-3">
-              {submissions
-                .filter((s) => s.status === 'approved')
-                .map((submission) => {
-                  const calculatedAmount = ((submission.final_score || 0) * 1000000) / 1000000000; // Convert score to SOL
-                  const displayAmount = customPayoutAmount || calculatedAmount.toFixed(4);
+            <div className="space-y-4">
+              {aggregatedPayouts.length > 0 ? (
+                aggregatedPayouts.map((payout: any) => {
+                  const amountSol = payout.totalAmountLamports / 1000000000;
+                  const loadingId = `aggregate-${payout.userId}`;
                    
                   return (
                     <div
-                      key={submission.id}
-                      className="bg-surface-light/50 p-4 rounded-xl border border-border"
+                      key={payout.userId}
+                      className="bg-surface-light/50 p-5 rounded-xl border border-border hover:border-border-light transition-all"
                     >
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                         <div>
                           <div className="flex items-center gap-3 mb-2">
-                            <p className="font-medium">@{submission.users?.x_username || 'Unknown'}</p>
-                            <span className="bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full font-medium flex-shrink-0">
-                              Approved
+                            <p className="font-medium text-lg">@{payout.username}</p>
+                            <span className="bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full font-medium">
+                              {payout.submissionCount} submissions
                             </span>
                           </div>
-                          <p className="text-muted text-sm mt-2 line-clamp-2">{submission.tweet_text}</p>
+                          <p className="text-muted text-sm">
+                            Total score: {payout.totalScore.toFixed(0)}
+                          </p>
+                          <p className="text-xs text-muted mt-1">
+                            {payout.payoutAddress.slice(0, 8)}...{payout.payoutAddress.slice(-8)}
+                          </p>
                         </div>
-                      </div>
-                      
-                      <div className="flex flex-col justify-between">
-                        <div>
-                          <label className="text-xs text-muted mb-1 block">Custom Amount (SOL)</label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            min="0.001"
-                            max="10"
-                            placeholder={calculatedAmount.toFixed(4)}
-                            value={customPayoutAmount}
-                            onChange={(e) => setCustomPayoutAmount(e.target.value)}
-                            className="input-dark text-sm"
-                          />
+                        
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-green-400">{amountSol.toFixed(4)} SOL</p>
+                          <p className="text-xs text-muted mt-1">Total amount owed</p>
                         </div>
-                       
-                        <div className="flex gap-2 mt-3">
+                        
+                        <div className="flex gap-2">
                           <button
-                            onClick={() => executePayout(submission.id, parseFloat(displayAmount))}
+                            onClick={() => executeAggregatePayout(payout.userId, payout)}
                             disabled={
-                              actionLoading === submission.id || 
-                              parseFloat(displayAmount) <= 0 ||
+                              actionLoading === loadingId || 
                               !adminWalletConnected
                             }
-                            className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                            className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
                           >
-                            {actionLoading === submission.id ? (
+                            {actionLoading === loadingId ? (
                               <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
                                 Paying...
@@ -588,31 +754,56 @@ export default function AdminPage() {
                               </>
                             ) : (
                               <>
-                                Pay {displayAmount} SOL
+                                Pay {amountSol.toFixed(4)} SOL
                               </>
                             )}
-                          </button>
-                           
-                          <button
-                            onClick={() => markAsPaid(submission.id)}
-                            disabled={actionLoading === submission.id}
-                            className="bg-surface border border-border hover:border-border-light text-muted px-3 py-2 rounded-xl transition-colors font-medium"
-                            title="Mark as paid without sending SOL"
-                          >
-                            Skip
                           </button>
                         </div>
                       </div>
                     </div>
                   );
-                })}
-              {submissions.filter((s) => s.status === 'approved').length === 0 && (
+                })
+              ) : (
                 <div className="text-center py-16 bg-surface/50 rounded-2xl border border-border border-dashed">
                   <CheckCircle className="w-10 h-10 text-muted mx-auto mb-3" />
                   <p className="text-muted">No approved payouts</p>
                   <p className="text-muted text-sm mt-2">Approve submissions first to enable payouts</p>
                 </div>
               )}
+            </div>
+
+            {/* Legacy Individual Submissions Section */}
+            <div className="mt-12">
+              <div className="border-t border-border/50 pt-6">
+                <h4 className="text-md font-semibold mb-4 text-muted">Individual Submissions (Legacy View)</h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {submissions
+                    .filter((s) => s.status === 'approved')
+                    .map((submission) => {
+                      const calculatedAmount = ((submission.final_score || 0) * 1000000) / 1000000000;
+                       
+                      return (
+                        <div
+                          key={submission.id}
+                          className="bg-surface/30 p-3 rounded-lg border border-border/50 text-sm"
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <span className="font-medium">@{submission.users?.x_username || 'Unknown'}</span>
+                              <span className="text-muted ml-2">{calculatedAmount.toFixed(4)} SOL</span>
+                            </div>
+                            <span className="text-xs text-muted bg-surface/50 px-2 py-1 rounded">
+                              Score: {submission.final_score?.toFixed(0)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {submissions.filter((s) => s.status === 'approved').length === 0 && (
+                    <p className="text-center text-muted text-sm py-4">No approved submissions</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
