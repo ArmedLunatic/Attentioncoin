@@ -8,19 +8,40 @@ import {
 } from '@/lib/solana';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const ADMIN_WALLET_ALLOWLIST = process.env.ADMIN_WALLET_ALLOWLIST?.split(',') || [];
 
-function verifyPassword(provided: string) {
-  return provided?.trim() === ADMIN_PASSWORD.trim();
+function verifySignature(message: string, signature: string, publicKey: string): boolean {
+  try {
+    const messageBytes = new TextEncoder().encode(message);
+    const signatureBytes = bs58.decode(signature);
+    const publicKeyBytes = bs58.decode(publicKey);
+    return nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
+  } catch (error) {
+    console.error('Signature verification error:', error);
+    return false;
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { password, action, submissionId, engagementData, rejectionReason, payoutAmount } = body;
+    const { action, submissionId, engagementData, rejectionReason, payoutAmount, signature, publicKey } = body;
 
-    if (!password || !verifyPassword(password)) {
+    if (!action || !signature || !publicKey) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Verify admin wallet
+    const isAdminWallet = ADMIN_WALLET_ALLOWLIST.includes(publicKey);
+    if (!isAdminWallet) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    // Verify signature
+    const message = `admin-action-${action}-${submissionId || ''}`;
+    const isValidSignature = verifySignature(message, signature, publicKey);
+    if (!isValidSignature) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
     const supabase = createServerClient();
