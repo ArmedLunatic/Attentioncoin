@@ -238,7 +238,10 @@ export default function AdminPage() {
       const [statsResult, payoutsResult, historyResult] = await Promise.all([
         callAdminApi('getStats'),
         callAdminApi('getAggregatedPayouts'),
-        callAdminApi('getPaymentHistory')
+        callAdminApi('getPaymentHistory').catch(err => {
+          console.warn('Payment history fetch failed:', err);
+          return { success: true, data: [] }; // Return empty array on error
+        })
       ]);
 
       if (statsResult.success) {
@@ -251,7 +254,7 @@ export default function AdminPage() {
       }
 
       if (historyResult.success) {
-        setPaymentHistory(historyResult.data);
+        setPaymentHistory(historyResult.data || []);
       }
     } catch (err: any) {
       console.error('Error loading data:', err);

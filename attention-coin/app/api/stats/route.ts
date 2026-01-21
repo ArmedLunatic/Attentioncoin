@@ -17,9 +17,9 @@ export async function GET() {
       .single();
 
     const config = configData?.value || {
-      daily_budget_sol: 10,
-      max_per_user_sol: 1,
-      min_payout_sol: 0.1,
+      daily_budget_sol: 1,
+      max_per_user_sol: 0.5,
+      min_payout_sol: 0.001,
       payout_interval_hours: 24,
     };
 
