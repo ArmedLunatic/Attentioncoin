@@ -2,14 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, AlertCircle, Loader2, Lock, Wallet } from 'lucide-react';
-import { useAdminWallet } from '@/contexts/AdminWalletContext';
-import { useSimpleWallet } from '@/hooks/useSimpleWallet';
-import { 
-  createAndSendSimpleTransfer, 
-  validateSimpleWalletBalance, 
-  getSimpleWalletBalance,
-  getExplorerUrl
-} from '@/lib/simple-wallet';
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
@@ -36,23 +28,13 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [customPayoutAmount, setCustomPayoutAmount] = useState<string>('');
-  const [adminWalletBalance, setAdminWalletBalance] = useState<number>(0);
+  const [adminWalletConnected, setAdminWalletConnected] = useState(false);
+  const [adminWalletPubKey, setAdminWalletPubKey] = useState<string | null>(null);
+  const [adminBalance, setAdminBalance] = useState<number>(0);
+  const [connecting, setConnecting] = useState(false);
 
   // Store password in session for subsequent API calls
   const [storedPassword, setStoredPassword] = useState<string | null>(null);
-
-  // Admin wallet context - only works on admin page
-  const { isAdminAuthenticated } = useAdminWallet();
-  const simpleWallet = useSimpleWallet();
-  
-  // Debug logging
-  useEffect(() => {
-    console.log('🔍 Admin page debug:');
-    console.log('- isAdminAuthenticated:', isAdminAuthenticated);
-    console.log('- simpleWallet.connected:', simpleWallet.connected);
-    console.log('- simpleWallet.publicKey:', simpleWallet.publicKey);
-    console.log('- window.solana:', typeof window !== 'undefined' ? (window as any).solana : 'window undefined');
-  }, [isAdminAuthenticated, simpleWallet.connected, simpleWallet.publicKey]);
 
   const callAdminApi = useCallback(async (action: string, data: Record<string, any> = {}) => {
     if (!storedPassword) {
@@ -113,30 +95,70 @@ export default function AdminPage() {
     }
   }, [isAuthenticated, loadData]);
 
-  // Update admin wallet balance when connected
-  useEffect(() => {
-    if (simpleWallet.connected && simpleWallet.publicKey) {
-      const updateBalance = async () => {
-        try {
-          // Create a simple wallet object for the balance function
-          const walletObj = { publicKey: { toBase58: () => simpleWallet.publicKey } } as any;
-          const balance = await getSimpleWalletBalance();
-          setAdminWalletBalance(balance);
-        } catch (err) {
-          console.error('Failed to get admin wallet balance:', err);
-        }
-      };
-
-      updateBalance();
+  // Check admin wallet connection
+  const checkWalletConnection = () => {
+    if (window.solana && window.solana.publicKey) {
+      setAdminWalletConnected(true);
+      setAdminWalletPubKey(window.solana.publicKey.toString());
       
-      // Set up interval to update balance
-      const interval = setInterval(updateBalance, 10000); // Update every 10 seconds
-      
-      return () => clearInterval(interval);
+      // Get balance
+      const connection = new (window as any).solanaWeb3.Connection(
+        'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
+      );
+      connection.getBalance(window.solana.publicKey).then(balance => {
+        setAdminBalance(balance);
+      });
     } else {
-      setAdminWalletBalance(0);
+      setAdminWalletConnected(false);
+      setAdminWalletPubKey(null);
+      setAdminBalance(0);
     }
-  }, [simpleWallet.connected, simpleWallet.publicKey]);
+  };
+
+  // Connect to Phantom wallet
+  const connectWallet = async () => {
+    if (!window.solana) {
+      alert('Please install Phantom wallet first: https://phantom.app');
+      return;
+    }
+
+    setConnecting(true);
+    try {
+      const response = await window.solana.connect();
+      setAdminWalletConnected(true);
+      setAdminWalletPubKey(response.publicKey.toString());
+      
+      // Get balance
+      const connection = new (window as any).solanaWeb3.Connection(
+        'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
+      );
+      const balance = await connection.getBalance(response.publicKey);
+      setAdminBalance(balance);
+      
+      console.log('✅ Admin wallet connected:', response.publicKey.toString());
+    } catch (error) {
+      console.error('Failed to connect wallet:', error);
+      alert('Failed to connect wallet: ' + error.message);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  // Check wallet connection periodically
+  useEffect(() => {
+    checkWalletConnection();
+    
+    // Listen for account changes
+    if (window.solana) {
+      const handleAccountChange = () => {
+        checkWalletConnection();
+      };
+      window.solana.on('accountChanged', handleAccountChange);
+      return () => {
+        window.solana.off('accountChanged', handleAccountChange);
+      };
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,8 +185,6 @@ export default function AdminPage() {
       // Password is correct
       setStoredPassword(password);
       setIsAuthenticated(true);
-      // Store admin authentication in sessionStorage for wallet context
-      sessionStorage.setItem('admin_authenticated', 'true');
       setStats(result.data.stats);
       setSubmissions(result.data.submissions);
       setPassword(''); // Clear the password field
@@ -218,7 +238,7 @@ export default function AdminPage() {
       setActionLoading(submissionId);
       setError(null);
 
-      if (!simpleWallet.connected || !simpleWallet.publicKey) {
+      if (!adminWalletConnected || !adminWalletPubKey) {
         throw new Error('Admin wallet not connected');
       }
 
@@ -237,21 +257,34 @@ export default function AdminPage() {
       // Check if client-side signing is required
       if (result.clientSideRequired) {
         // Validate admin wallet balance
-        const balanceValidation = await validateSimpleWalletBalance(
-          data.amountLamports
-        );
-
-        if (!balanceValidation.sufficient) {
-          throw new Error(`Insufficient admin wallet balance. Have ${(balanceValidation.balance / 1000000000).toFixed(4)} SOL, need ${(balanceValidation.required / 1000000000).toFixed(4)} SOL`);
+        const requiredLamports = data.amountLamports;
+        if (adminBalance < requiredLamports + 1000000) { // Add 0.001 SOL buffer
+          throw new Error(`Insufficient admin wallet balance. Have ${(adminBalance / 1000000000).toFixed(4)} SOL, need ${(requiredLamports / 1000000000).toFixed(4)} SOL`);
         }
 
         // Execute client-side transfer - this will trigger Phantom popup
-        const signature = await createAndSendSimpleTransfer(
-          data.recipient,
-          data.amountLamports
+        const connection = new (window as any).solanaWeb3.Connection(
+          'https://devnet.helius-rpc.com/?api-key=60022fb0-2daf-404f-af6f-b7db9ab0efc5'
+        );
+        
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+        const transaction = new (window as any).solanaWeb3.Transaction({
+          blockhash,
+          lastValidBlockHeight,
+          feePayer: window.solana.publicKey,
+        }).add(
+          (window as any).solanaWeb3.SystemProgram.transfer({
+            fromPubkey: window.solana.publicKey,
+            toPubkey: new (window as any).solanaWeb3.PublicKey(data.recipient),
+            lamports: data.amountLamports,
+          })
         );
 
-        // Record the completed transaction
+        // Sign transaction with Phantom wallet
+        const signedTransaction = await window.solana.signTransaction(transaction);
+        const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+
+        // Record completed transaction
         const recordResult = await callAdminApi('recordPayout', {
           submissionId,
           signature,
@@ -372,7 +405,6 @@ export default function AdminPage() {
             onClick={() => {
               setIsAuthenticated(false);
               setStoredPassword(null);
-              sessionStorage.removeItem('admin_authenticated');
             }}
             className="text-sm text-muted hover:text-white transition-colors"
           >
@@ -404,29 +436,37 @@ export default function AdminPage() {
           <div className="bg-surface/80 border border-border rounded-2xl p-5 sm:p-6 hover:border-border-light transition-all duration-200">
             <div className="flex items-center justify-between mb-2">
               <p className="text-muted text-sm">Admin Wallet</p>
-              {simpleWallet.connected && simpleWallet.publicKey ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <span className="text-xs text-green-400 font-medium">SECURED</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                  <span className="text-xs text-red-400 font-medium">UNSECURED</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {adminWalletConnected ? (
+                  <>
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-xs text-green-400 font-medium">CONNECTED</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                    <span className="text-xs text-red-400 font-medium">NOT CONNECTED</span>
+                  </>
+                )}
+              </div>
             </div>
             <p className="text-lg font-bold mb-1">
-              {simpleWallet.publicKey 
-                ? `${simpleWallet.publicKey.slice(0, 4)}...${simpleWallet.publicKey.slice(-4)}`
+              {adminWalletPubKey 
+                ? `${adminWalletPubKey.slice(0, 4)}...${adminWalletPubKey.slice(-4)}`
                 : 'Not Connected'
               }
             </p>
             <p className="text-xs text-muted">
-              Balance: {(adminWalletBalance / 1000000000).toFixed(4)} SOL
+              Balance: {(adminBalance / 1000000000).toFixed(4)} SOL
             </p>
-            {!simpleWallet.connected && (
-              <p className="text-xs text-yellow-400 mt-1">Connect wallet to enable payouts</p>
+            {!adminWalletConnected && (
+              <button
+                onClick={connectWallet}
+                disabled={connecting}
+                className="mt-2 bg-primary text-black px-3 py-1 text-xs rounded-lg font-semibold hover:bg-primary/80 disabled:opacity-50"
+              >
+                {connecting ? 'Connecting...' : 'Connect Phantom'}
+              </button>
             )}
           </div>
         </div>
@@ -465,224 +505,26 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* Dashboard Tab */}
-        {tab === 'dashboard' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-surface/80 border border-border rounded-2xl p-6">
-              <h3 className="text-lg font-semibold mb-5">Overview</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-border">
-                  <span className="text-muted">Total Approved</span>
-                  <span className="text-green-400 font-medium">{stats.totalApproved}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-border">
-                  <span className="text-muted">Pending Payment</span>
-                  <span className="text-yellow-400 font-medium">{stats.pendingPayment}</span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-muted">Total Paid (SOL)</span>
-                  <span className="text-primary font-medium">{(stats.totalPaid / 1000000000).toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Submissions Tab */}
-        {tab === 'submissions' && (
-          <div>
-            {selectedSubmission ? (
-              <div className="bg-surface/80 border border-border rounded-2xl p-6 sm:p-8">
-                <button
-                  onClick={() => setSelectedSubmission(null)}
-                  className="mb-6 text-primary hover:text-primary-light transition-colors text-sm font-medium"
-                >
-                  &larr; Back to Submissions
-                </button>
-
-                <div className="space-y-6">
-                  <div>
-                    <p className="text-muted text-sm mb-2">Tweet Content</p>
-                    <p className="text-white text-base leading-relaxed">{selectedSubmission.tweet_text}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-muted text-sm mb-2">Tweet URL</p>
-                    <a
-                      href={selectedSubmission.tweet_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:text-primary-light transition-colors"
-                    >
-                      View Tweet &rarr;
-                    </a>
-                  </div>
-
-                  <div>
-                    <p className="text-muted text-sm mb-4">Engagement Numbers (from Twitter)</p>
-                    <div className="grid grid-cols-3 gap-3 sm:gap-4">
-                      <input
-                        type="number"
-                        placeholder="Likes"
-                        value={engagementData.likes}
-                        onChange={(e) =>
-                          setEngagementData({
-                            ...engagementData,
-                            likes: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        className="input-dark"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Reposts"
-                        value={engagementData.reposts}
-                        onChange={(e) =>
-                          setEngagementData({
-                            ...engagementData,
-                            reposts: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        className="input-dark"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Replies"
-                        value={engagementData.replies}
-                        onChange={(e) =>
-                          setEngagementData({
-                            ...engagementData,
-                            replies: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        className="input-dark"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 sm:gap-4 pt-2">
-                    <button
-                      onClick={() => approveSubmission(selectedSubmission.id)}
-                      disabled={actionLoading === selectedSubmission.id}
-                      className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-                    >
-                      {actionLoading === selectedSubmission.id ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        'Approve'
-                      )}
-                    </button>
-                    <button
-                      onClick={() => rejectSubmission(selectedSubmission.id)}
-                      disabled={actionLoading === selectedSubmission.id}
-                      className="flex-1 bg-red-600 hover:bg-red-500 disabled:bg-red-800 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-                    >
-                      {actionLoading === selectedSubmission.id ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        'Reject'
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {submissions
-                  .filter((s) => s.status === 'pending')
-                  .map((submission) => (
-                    <div
-                      key={submission.id}
-                      className="bg-surface/80 border border-border rounded-2xl p-5 sm:p-6 hover:border-border-light transition-all duration-200 cursor-pointer"
-                      onClick={() => setSelectedSubmission(submission)}
-                    >
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium">@{submission.users?.x_username || 'Unknown'}</p>
-                          <p className="text-muted text-sm mt-2 line-clamp-2">{submission.tweet_text}</p>
-                        </div>
-                        <span className="bg-yellow-500/10 text-yellow-400 text-xs px-3 py-1.5 rounded-full font-medium flex-shrink-0">
-                          Pending
-                        </span>
-                      </div>
-                      <p className="text-primary text-sm mt-4 font-medium">Click to review &rarr;</p>
-                    </div>
-                  ))}
-                {submissions.filter((s) => s.status === 'pending').length === 0 && (
-                  <div className="text-center py-16 bg-surface/50 rounded-2xl border border-border border-dashed">
-                    <CheckCircle className="w-10 h-10 text-muted mx-auto mb-3" />
-                    <p className="text-muted">No pending submissions</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Payout Tab */}
         {tab === 'payout' && (
           <div className="bg-surface/80 border border-border rounded-2xl p-6 sm:p-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Approved Payouts</h3>
               <div className="text-sm text-muted">
-                {simpleWallet.connected 
+                {adminWalletConnected 
                   ? "Click 'Pay' to send SOL instantly" 
                   : "Connect admin wallet to enable payouts"
                 }
               </div>
             </div>
-
-            {/* Admin Wallet Status */}
-            <div className="mb-6 p-4 bg-surface-light/50 rounded-xl border border-border">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Wallet className="w-5 h-5 text-muted" />
-                  <div>
-                    <p className="text-sm font-medium">Admin Wallet Status</p>
-                    <p className="text-xs text-muted">
-                      {simpleWallet.publicKey 
-                        ? `Connected: ${simpleWallet.publicKey.slice(0, 6)}...${simpleWallet.publicKey.slice(-4)}`
-                        : 'No wallet connected'
-                      }
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {simpleWallet.connected ? (
-                    <>
-                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                      <span className="text-xs text-green-400 font-medium">CONNECTED</span>
-                      <span className="text-xs text-muted ml-2">
-                        {(adminWalletBalance / 1000000000).toFixed(4)} SOL
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                      <span className="text-xs text-red-400 font-medium">NOT CONNECTED</span>
-                      <button
-                        onClick={simpleWallet.connect}
-                        disabled={simpleWallet.connecting}
-                        className="ml-2 bg-primary text-black px-3 py-1 text-xs rounded-lg font-semibold hover:bg-primary/80 disabled:opacity-50"
-                      >
-                        {simpleWallet.connecting ? 'Connecting...' : 'Connect'}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-              {!simpleWallet.connected && (
-                <p className="text-xs text-yellow-400 mt-1">Connect wallet to enable payouts</p>
-              )}
-            </div>
-            
+             
             <div className="space-y-3">
               {submissions
                 .filter((s) => s.status === 'approved')
                 .map((submission) => {
                   const calculatedAmount = ((submission.final_score || 0) * 1000000) / 1000000000; // Convert score to SOL
                   const displayAmount = customPayoutAmount || calculatedAmount.toFixed(4);
-                  
+                   
                   return (
                     <div
                       key={submission.id}
@@ -692,71 +534,64 @@ export default function AdminPage() {
                         <div>
                           <div className="flex items-center gap-3 mb-2">
                             <p className="font-medium">@{submission.users?.x_username || 'Unknown'}</p>
-                            <span className="bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full font-medium">
+                            <span className="bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full font-medium flex-shrink-0">
                               Approved
                             </span>
                           </div>
-                          <p className="text-muted text-sm">
-                            Score: {submission.final_score || 0} → Est: {calculatedAmount.toFixed(4)} SOL
-                          </p>
-                          {submission.users?.payout_address && (
-                            <p className="text-xs text-muted mt-1">
-                              Payout: {submission.users.payout_address.slice(0, 6)}...{submission.users.payout_address.slice(-4)}
-                            </p>
-                          )}
+                          <p className="text-muted text-sm mt-2 line-clamp-2">{submission.tweet_text}</p>
                         </div>
-                        
-                        <div className="flex flex-col justify-between">
-                          <div>
-                            <label className="text-xs text-muted mb-1 block">Custom Amount (SOL)</label>
-                            <input
-                              type="number"
-                              step="0.001"
-                              min="0.001"
-                              max="10"
-                              placeholder={calculatedAmount.toFixed(4)}
-                              value={customPayoutAmount}
-                              onChange={(e) => setCustomPayoutAmount(e.target.value)}
-                              className="input-dark text-sm"
-                            />
-                          </div>
-                          
-                           <div className="flex gap-2 mt-3">
-                             <button
-                               onClick={() => executePayout(submission.id, parseFloat(displayAmount))}
-                               disabled={
-                                 actionLoading === submission.id || 
-                                 parseFloat(displayAmount) <= 0 ||
-                                 !simpleWallet.connected
-                               }
-                               className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
-                             >
-                               {actionLoading === submission.id ? (
-                                 <>
-                                   <Loader2 className="w-4 h-4 animate-spin" />
-                                   Paying...
-                                 </>
-                               ) : !simpleWallet.connected ? (
-                                 <>
-                                   <Wallet className="w-4 h-4" />
-                                   Connect Wallet
-                                 </>
-                               ) : (
-                                 <>
-                                   Pay {displayAmount} SOL
-                                 </>
-                               )}
-                             </button>
-                            
-                            <button
-                              onClick={() => markAsPaid(submission.id)}
-                              disabled={actionLoading === submission.id}
-                              className="bg-surface border border-border hover:border-border-light text-muted px-3 py-2 rounded-xl transition-colors font-medium"
-                              title="Mark as paid without sending SOL"
-                            >
-                              Skip
-                            </button>
-                          </div>
+                      </div>
+                      
+                      <div className="flex flex-col justify-between">
+                        <div>
+                          <label className="text-xs text-muted mb-1 block">Custom Amount (SOL)</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            min="0.001"
+                            max="10"
+                            placeholder={calculatedAmount.toFixed(4)}
+                            value={customPayoutAmount}
+                            onChange={(e) => setCustomPayoutAmount(e.target.value)}
+                            className="input-dark text-sm"
+                          />
+                        </div>
+                       
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => executePayout(submission.id, parseFloat(displayAmount))}
+                            disabled={
+                              actionLoading === submission.id || 
+                              parseFloat(displayAmount) <= 0 ||
+                              !adminWalletConnected
+                            }
+                            className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                          >
+                            {actionLoading === submission.id ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Paying...
+                              </>
+                            ) : !adminWalletConnected ? (
+                              <>
+                                <Wallet className="w-4 h-4" />
+                                Connect Wallet
+                              </>
+                            ) : (
+                              <>
+                                Pay {displayAmount} SOL
+                              </>
+                            )}
+                          </button>
+                           
+                          <button
+                            onClick={() => markAsPaid(submission.id)}
+                            disabled={actionLoading === submission.id}
+                            className="bg-surface border border-border hover:border-border-light text-muted px-3 py-2 rounded-xl transition-colors font-medium"
+                            title="Mark as paid without sending SOL"
+                          >
+                            Skip
+                          </button>
                         </div>
                       </div>
                     </div>
