@@ -27,91 +27,19 @@ export async function POST(req: NextRequest) {
 
     switch (action) {
       case 'getStats': {
-        const { data: submissions } = await supabase
-          .from('submissions')
-          .select('*, users(*)')
-          .order('created_at', { ascending: false });
-
-        const { count: totalUsers } = await supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true });
-
-        // Get funding wallet balance
-        let fundingBalance = 0;
-        try {
-          fundingBalance = await getFundingBalance();
-        } catch (balanceError) {
-          console.error('Failed to get funding balance:', balanceError);
-        }
-
-        return NextResponse.json({
-          success: true,
-          data: {
-            stats: {
-              totalUsers: totalUsers || 0,
-              fundingBalance: fundingBalance,
-            },
-            submissions: submissions || [],
-          },
-        });
+        // ... existing code ...
       }
 
       case 'approve': {
-        if (!submissionId || !engagementData) {
-          return NextResponse.json({ error: 'Missing data' }, { status: 400 });
-        }
-
-        const { likes = 0, reposts = 0, replies = 0 } = engagementData;
-        const raw = likes + reposts * 2 + replies;
-        const final_score =
-          raw > 0 ? Math.round(Math.log10(raw + 1) * 10 * 100) / 100 : 0;
-
-        const { error } = await supabase
-          .from('submissions')
-          .update({
-            status: 'approved',
-            likes,
-            reposts,
-            replies,
-            final_score,
-            approved_at: new Date().toISOString(),
-          })
-          .eq('id', submissionId);
-
-        if (error) {
-          return NextResponse.json({ error: 'Approve failed' }, { status: 500 });
-        }
-
-        return NextResponse.json({ success: true });
+        // ... existing code ...
       }
 
       case 'reject': {
-        if (!submissionId) {
-          return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
-        }
-
-        await supabase
-          .from('submissions')
-          .update({
-            status: 'rejected',
-            rejection_reason: rejectionReason || null,
-          })
-          .eq('id', submissionId);
-
-        return NextResponse.json({ success: true });
+        // ... existing code ...
       }
 
       case 'markPaid': {
-        if (!submissionId) {
-          return NextResponse.json({ error: 'Missing submissionId' }, { status: 400 });
-        }
-
-        await supabase
-          .from('submissions')
-          .update({ status: 'paid' })
-          .eq('id', submissionId);
-
-        return NextResponse.json({ success: true });
+        // ... existing code ...
       }
 
       case 'executePayout': {
@@ -162,92 +90,32 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Payout amount must be positive' }, { status: 400 });
         }
 
-        // Return payout details for client-side execution
-        return NextResponse.json({
-          success: true,
-          clientSideRequired: true,
-          data: {
-            recipient: payoutAddress,
-            amount: payoutLamports / LAMPORTS_PER_SOL,
-            amountLamports: payoutLamports,
-            username: user.x_username,
-            submissionId
-          }
-        });
+        // Validate funding balance
+        const requiredBalance = payoutLamports;
+        await validateFundingBalance(requiredBalance);
+
+        // Send SOL transfer
+        try {
+          const txSignature = await sendSolTransfer(payoutAddress, payoutLamports);
+          return NextResponse.json({
+            success: true,
+            data: {
+              recipient: payoutAddress,
+              amount: payoutLamports / LAMPORTS_PER_SOL,
+              amountLamports: payoutLamports,
+              username: user.x_username,
+              submissionId,
+              txSignature
+            }
+          });
+        } catch (sendError) {
+          console.error('Failed to send SOL transfer:', sendError);
+          return NextResponse.json({ error: 'Failed to send SOL transfer' }, { status: 500 });
+        }
       }
 
       case 'getAggregatedPayouts': {
-        // Get all approved submissions grouped by user
-        const { data: submissions } = await supabase
-          .from('submissions')
-          .select(`
-            id,
-            user_id,
-            final_score,
-            users!inner(
-              id,
-              x_username,
-              payout_address,
-              wallet_address
-            )
-          `)
-          .eq('status', 'approved')
-          .gt('final_score', 0)
-          .order('created_at', { ascending: false });
-
-        if (!submissions) {
-          return NextResponse.json({
-            success: true,
-            data: []
-          });
-        }
-
-        // Aggregate by user
-        const userAggregates: Record<string, {
-          userId: string;
-          username: string;
-          payoutAddress: string;
-          totalScore: number;
-          submissionIds: string[];
-          totalAmountLamports: number;
-          submissionCount: number;
-        }> = {};
-
-        for (const sub of submissions) {
-          const userId = sub.user_id;
-          const users = sub.users as any; // Cast to any to access nested properties
-          const payoutAddress = users.payout_address || users.wallet_address;
-          
-          // Skip users without payout address
-          if (!payoutAddress) {
-            continue;
-          }
-
-          if (!userAggregates[userId]) {
-            userAggregates[userId] = {
-              userId,
-              username: users.x_username || 'Unknown',
-              payoutAddress,
-              totalScore: 0,
-              submissionIds: [],
-              totalAmountLamports: 0,
-              submissionCount: 0
-            };
-          }
-
-          const submissionAmount = Math.round((sub.final_score || 0) * 1000000);
-          userAggregates[userId].totalScore += sub.final_score || 0;
-          userAggregates[userId].submissionIds.push(sub.id);
-          userAggregates[userId].totalAmountLamports += submissionAmount;
-          userAggregates[userId].submissionCount++;
-        }
-
-        const aggregatedPayouts = Object.values(userAggregates);
-
-        return NextResponse.json({
-          success: true,
-          data: aggregatedPayouts
-        });
+        // ... existing code ...
       }
 
       case 'executeAggregatePayout': {
@@ -299,19 +167,30 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Total payout amount must be positive' }, { status: 400 });
         }
 
-        return NextResponse.json({
-          success: true,
-          clientSideRequired: true,
-          data: {
-            recipient: payoutAddress,
-            amount: totalLamports / LAMPORTS_PER_SOL,
-            amountLamports: totalLamports,
-            username: users.x_username,
-            userId,
-            submissionIds,
-            submissionCount: submissions.length
-          }
-        });
+        // Validate funding balance
+        const requiredBalance = totalLamports;
+        await validateFundingBalance(requiredBalance);
+
+        // Send SOL transfer
+        try {
+          const txSignature = await sendSolTransfer(payoutAddress, totalLamports);
+          return NextResponse.json({
+            success: true,
+            data: {
+              recipient: payoutAddress,
+              amount: totalLamports / LAMPORTS_PER_SOL,
+              amountLamports: totalLamports,
+              username: users.x_username,
+              userId,
+              submissionIds,
+              submissionCount: submissions.length,
+              txSignature
+            }
+          });
+        } catch (sendError) {
+          console.error('Failed to send SOL transfer:', sendError);
+          return NextResponse.json({ error: 'Failed to send SOL transfer' }, { status: 500 });
+        }
       }
 
       case 'recordAggregatePayout': {
