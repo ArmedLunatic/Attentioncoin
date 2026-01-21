@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, AlertCircle, Loader2, Wallet } from 'lucide-react';
+import Script from 'next/script';
 import bs58 from 'bs58';
 
 // Get the correct Helius RPC URL based on network
@@ -41,6 +42,7 @@ declare global {
 export default function AdminPage() {
   // Client-side mount state
   const [isMounted, setIsMounted] = useState(false);
+  const [solanaLoaded, setSolanaLoaded] = useState(false);
   const [phantomInstalled, setPhantomInstalled] = useState(false);
 
   // Wallet-based authentication state
@@ -202,12 +204,17 @@ export default function AdminPage() {
    * Update wallet balance
    */
   const updateWalletBalance = async (publicKey: string) => {
+    if (!solanaLoaded || !window.solanaWeb3) {
+      console.error('Solana Web3 not loaded');
+      return;
+    }
+
     try {
-      const connection = new (window as any).solanaWeb3.Connection(
+      const connection = new window.solanaWeb3.Connection(
         getHeliusRpcUrl(),
         'confirmed'
       );
-      const pubKey = new (window as any).solanaWeb3.PublicKey(publicKey);
+      const pubKey = new window.solanaWeb3.PublicKey(publicKey);
       const balance = await connection.getBalance(pubKey);
       setWalletBalance(balance);
     } catch (err) {
@@ -262,7 +269,7 @@ export default function AdminPage() {
       const hasPhantom = !!(window.solana?.isPhantom);
       setPhantomInstalled(hasPhantom);
 
-      if (hasPhantom && window.solana?.publicKey) {
+      if (hasPhantom && window.solana?.publicKey && solanaLoaded) {
         const pubKey = window.solana.publicKey.toString();
         setWalletConnected(true);
         setWalletPublicKey(pubKey);
@@ -271,10 +278,12 @@ export default function AdminPage() {
       }
     };
 
-    // Wait for Phantom to inject
-    const timer = setTimeout(checkConnection, 100);
-    return () => clearTimeout(timer);
-  }, [verifyAdminAccess]);
+    // Wait for Phantom and Solana to load
+    if (solanaLoaded) {
+      const timer = setTimeout(checkConnection, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [verifyAdminAccess, solanaLoaded]);
 
   // Listen for account changes
   useEffect(() => {
@@ -343,6 +352,11 @@ export default function AdminPage() {
   }
 
   async function executeAggregatePayout(userId: string, aggregatedData: any) {
+    if (!solanaLoaded || !window.solanaWeb3) {
+      alert('Solana Web3 library not loaded. Please refresh the page.');
+      return;
+    }
+
     try {
       setActionLoading(`aggregate-${userId}`);
       setError(null);
@@ -368,20 +382,20 @@ export default function AdminPage() {
       }
 
       // Execute client-side transfer - this will trigger Phantom popup
-      const connection = new (window as any).solanaWeb3.Connection(
+      const connection = new window.solanaWeb3.Connection(
         getHeliusRpcUrl(),
         'confirmed'
       );
 
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      const transaction = new (window as any).solanaWeb3.Transaction({
+      const transaction = new window.solanaWeb3.Transaction({
         blockhash,
         lastValidBlockHeight,
         feePayer: window.solana.publicKey,
       }).add(
-        (window as any).solanaWeb3.SystemProgram.transfer({
+        window.solanaWeb3.SystemProgram.transfer({
           fromPubkey: window.solana.publicKey,
-          toPubkey: new (window as any).solanaWeb3.PublicKey(data.recipient),
+          toPubkey: new window.solanaWeb3.PublicKey(data.recipient),
           lamports: data.amountLamports,
         })
       );
@@ -481,130 +495,162 @@ export default function AdminPage() {
   // Show loading state before client-side mount
   if (!isMounted) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin text-primary" />
-          <p className="text-muted-light">Loading admin panel...</p>
+      <>
+        <Script
+          src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"
+          strategy="afterInteractive"
+          onLoad={() => setSolanaLoaded(true)}
+        />
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="text-center">
+            <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin text-primary" />
+            <p className="text-muted-light">Loading admin panel...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // Wallet connection screen (not connected or not admin)
   if (!walletConnected || !isAdmin) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-surface-light border border-border flex items-center justify-center mx-auto mb-6">
-              <Wallet className="w-8 h-8 text-muted" />
+      <>
+        <Script
+          src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"
+          strategy="afterInteractive"
+          onLoad={() => setSolanaLoaded(true)}
+        />
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 rounded-2xl bg-surface-light border border-border flex items-center justify-center mx-auto mb-6">
+                <Wallet className="w-8 h-8 text-muted" />
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight mb-3">Admin Access</h1>
+              <p className="text-muted-light">
+                {walletConnected
+                  ? 'Verifying admin wallet...'
+                  : 'Connect your admin wallet to continue'}
+              </p>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight mb-3">Admin Access</h1>
-            <p className="text-muted-light">
-              {walletConnected
-                ? 'Verifying admin wallet...'
-                : 'Connect your admin wallet to continue'}
-            </p>
-          </div>
 
-          {authError && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-red-400">Access Denied</p>
-                  <p className="text-red-300 text-sm mt-1">{authError}</p>
+            {authError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-red-400">Access Denied</p>
+                    <p className="text-red-300 text-sm mt-1">{authError}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {walletConnected && walletPublicKey && (
-            <div className="bg-surface/80 border border-border rounded-xl p-4 mb-6">
-              <p className="text-sm text-muted mb-1">Connected Wallet</p>
-              <p className="font-mono text-sm">
-                {walletPublicKey.slice(0, 8)}...{walletPublicKey.slice(-8)}
-              </p>
-              <p className="text-xs text-muted mt-2">
-                Balance: {(walletBalance / 1000000000).toFixed(4)} SOL
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {!walletConnected ? (
-              <button
-                onClick={connectWallet}
-                disabled={connecting}
-                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {connecting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Wallet className="w-5 h-5" />
-                    Connect Phantom Wallet
-                  </>
-                )}
-              </button>
-            ) : authChecking ? (
-              <div className="flex items-center justify-center gap-2 py-3 text-muted">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Verifying admin access...
+            {walletConnected && walletPublicKey && (
+              <div className="bg-surface/80 border border-border rounded-xl p-4 mb-6">
+                <p className="text-sm text-muted mb-1">Connected Wallet</p>
+                <p className="font-mono text-sm">
+                  {walletPublicKey.slice(0, 8)}...{walletPublicKey.slice(-8)}
+                </p>
+                <p className="text-xs text-muted mt-2">
+                  Balance: {(walletBalance / 1000000000).toFixed(4)} SOL
+                </p>
               </div>
-            ) : (
-              <>
+            )}
+
+            <div className="space-y-3">
+              {!walletConnected ? (
                 <button
-                  onClick={verifyAdminAccess}
-                  disabled={authChecking}
-                  className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={connectWallet}
+                  disabled={connecting || !solanaLoaded}
+                  className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Retry Verification
+                  {connecting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : !solanaLoaded ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="w-5 h-5" />
+                      Connect Phantom Wallet
+                    </>
+                  )}
                 </button>
-                <button
-                  onClick={disconnectWallet}
-                  className="w-full py-2.5 text-sm text-muted hover:text-white transition-colors"
+              ) : authChecking ? (
+                <div className="flex items-center justify-center gap-2 py-3 text-muted">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Verifying admin access...
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={verifyAdminAccess}
+                    disabled={authChecking}
+                    className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Retry Verification
+                  </button>
+                  <button
+                    onClick={disconnectWallet}
+                    className="w-full py-2.5 text-sm text-muted hover:text-white transition-colors"
+                  >
+                    Disconnect Wallet
+                  </button>
+                </>
+              )}
+            </div>
+
+            {!phantomInstalled && (
+              <p className="text-center text-sm text-muted mt-6">
+                Don&apos;t have Phantom?{' '}
+                <a
+                  href="https://phantom.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
                 >
-                  Disconnect Wallet
-                </button>
-              </>
+                  Install it here
+                </a>
+              </p>
             )}
           </div>
-
-          {!phantomInstalled && (
-            <p className="text-center text-sm text-muted mt-6">
-              Don&apos;t have Phantom?{' '}
-              <a
-                href="https://phantom.app"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                Install it here
-              </a>
-            </p>
-          )}
         </div>
-      </div>
+      </>
     );
   }
 
   if (loading && submissions.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin text-primary" />
-          <p className="text-muted-light">Loading admin data...</p>
+      <>
+        <Script
+          src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"
+          strategy="afterInteractive"
+          onLoad={() => setSolanaLoaded(true)}
+        />
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="text-center">
+            <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin text-primary" />
+            <p className="text-muted-light">Loading admin data...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background py-6 sm:py-10 px-4 sm:px-8">
+    <>
+      <Script
+        src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"
+        strategy="afterInteractive"
+        onLoad={() => setSolanaLoaded(true)}
+      />
+      <div className="min-h-screen bg-background py-6 sm:py-10 px-4 sm:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Admin Dashboard</h1>
@@ -956,5 +1002,6 @@ export default function AdminPage() {
         )}
       </div>
     </div>
+    </>
   );
 }
