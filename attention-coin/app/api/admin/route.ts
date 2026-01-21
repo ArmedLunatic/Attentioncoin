@@ -203,16 +203,15 @@ export async function POST(req: Request) {
         }
 
         // Mark submission as paid
-        const { error: paidError } = await supabase
+        const { error: markPaidError } = await supabase
           .from('submissions')
           .update({
-            paid: true,
             paid_at: new Date().toISOString()
           })
           .eq('id', paidId);
 
-        if (paidError) {
-          console.error('Error marking as paid:', paidError);
+        if (markPaidError) {
+          console.error('Error marking as paid:', markPaidError);
           return NextResponse.json({ error: 'Failed to mark as paid' }, { status: 500 });
         }
 
@@ -378,6 +377,66 @@ export async function POST(req: Request) {
             submissionIds: userSubmissionIds,
             submissionCount: userSubmissions.length
           }
+        });
+
+      case 'getPaymentHistory':
+        // Verify admin access
+        const historyAdminWallet = process.env.NEXT_PUBLIC_ADMIN_WALLET;
+        if (!historyAdminWallet || body.publicKey?.toLowerCase() !== historyAdminWallet.toLowerCase()) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        // Get all paid submissions with user info, grouped by transaction
+        const { data: paidSubmissions, error: historyError } = await supabase
+          .from('submissions')
+          .select(`
+            id,
+            user_id,
+            final_score,
+            paid_at,
+            tx_signature,
+            users (
+              x_username
+            )
+          `)
+          .eq('status', 'approved')
+          .not('paid_at', 'is', null)
+          .order('paid_at', { ascending: false });
+
+        if (historyError) {
+          console.error('Error fetching payment history:', historyError);
+          return NextResponse.json({ error: 'Failed to fetch payment history' }, { status: 500 });
+        }
+
+        // Group by transaction signature
+        const paymentMap = new Map();
+
+        for (const submission of (paidSubmissions || [])) {
+          const txSig = submission.tx_signature;
+          if (!txSig) continue;
+
+          if (!paymentMap.has(txSig)) {
+            paymentMap.set(txSig, {
+              id: txSig,
+              tx_signature: txSig,
+              paid_at: submission.paid_at,
+              username: (submission.users as any)?.x_username || 'Unknown',
+              amount_lamports: 0,
+              submission_count: 0,
+              user_id: submission.user_id
+            });
+          }
+
+          const payment = paymentMap.get(txSig);
+          payment.amount_lamports += (submission.final_score || 0) * 1000000;
+          payment.submission_count += 1;
+        }
+
+        const paymentHistory = Array.from(paymentMap.values());
+
+        return NextResponse.json({
+          success: true,
+          data: paymentHistory
         });
 
       case 'recordAggregatePayout':

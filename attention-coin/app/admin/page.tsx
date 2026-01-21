@@ -66,6 +66,7 @@ export default function AdminPage() {
   });
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [aggregatedPayouts, setAggregatedPayouts] = useState<any[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [tab, setTab] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -234,9 +235,10 @@ export default function AdminPage() {
       setLoading(true);
       setError(null);
 
-      const [statsResult, payoutsResult] = await Promise.all([
+      const [statsResult, payoutsResult, historyResult] = await Promise.all([
         callAdminApi('getStats'),
-        callAdminApi('getAggregatedPayouts')
+        callAdminApi('getAggregatedPayouts'),
+        callAdminApi('getPaymentHistory')
       ]);
 
       if (statsResult.success) {
@@ -246,6 +248,10 @@ export default function AdminPage() {
 
       if (payoutsResult.success) {
         setAggregatedPayouts(payoutsResult.data);
+      }
+
+      if (historyResult.success) {
+        setPaymentHistory(historyResult.data);
       }
     } catch (err: any) {
       console.error('Error loading data:', err);
@@ -735,6 +741,16 @@ export default function AdminPage() {
           >
             Payouts
           </button>
+          <button
+            onClick={() => setTab('history')}
+            className={`px-4 sm:px-6 py-2.5 rounded-xl font-medium transition-all duration-200 ${
+              tab === 'history'
+                ? 'bg-primary text-black'
+                : 'bg-surface-light border border-border text-muted hover:text-white hover:border-border-light'
+            }`}
+          >
+            Payment History
+          </button>
         </div>
 
         {/* Dashboard Tab */}
@@ -997,6 +1013,79 @@ export default function AdminPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment History Tab */}
+        {tab === 'history' && (
+          <div className="bg-surface/80 border border-border rounded-2xl p-6 sm:p-8">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-lg font-semibold">Payment History</h3>
+                <p className="text-sm text-muted mt-1">All completed payouts</p>
+              </div>
+              <button
+                onClick={loadData}
+                disabled={loading}
+                className="text-sm text-muted hover:text-white transition-colors flex items-center gap-2"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Refresh
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {paymentHistory.length > 0 ? (
+                paymentHistory.map((payment: any) => {
+                  const amountSol = payment.amount_lamports / 1000000000;
+                  const date = new Date(payment.paid_at).toLocaleString();
+
+                  return (
+                    <div
+                      key={payment.id}
+                      className="bg-surface-light/50 p-4 rounded-xl border border-border"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                        <div>
+                          <p className="font-medium">@{payment.username}</p>
+                          <p className="text-xs text-muted mt-1">{date}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-sm text-muted">Amount</p>
+                          <p className="font-bold text-green-400">{amountSol.toFixed(4)} SOL</p>
+                        </div>
+
+                        <div>
+                          <p className="text-sm text-muted">Submissions</p>
+                          <p className="font-medium">{payment.submission_count}</p>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <a
+                            href={`https://solscan.io/tx/${payment.tx_signature}${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet' ? '?cluster=devnet' : ''}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline font-mono truncate"
+                          >
+                            {payment.tx_signature.slice(0, 8)}...{payment.tx_signature.slice(-8)}
+                          </a>
+                          <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded w-fit">
+                            PAID
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-16 bg-surface/50 rounded-2xl border border-border border-dashed">
+                  <CheckCircle className="w-10 h-10 text-muted mx-auto mb-3" />
+                  <p className="text-muted">No payment history yet</p>
+                  <p className="text-muted text-sm mt-2">Completed payouts will appear here</p>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -23,14 +23,15 @@ export async function GET() {
       payout_interval_hours: 24,
     };
 
-    // Get total SOL paid out (completed payouts)
-    const { data: payoutsData } = await supabase
-      .from('payouts')
-      .select('amount_lamports')
-      .eq('status', 'completed');
+    // Get total SOL paid out (from paid submissions)
+    const { data: paidSubmissions } = await supabase
+      .from('submissions')
+      .select('final_score')
+      .eq('status', 'approved')
+      .not('paid_at', 'is', null);
 
-    const totalPaidLamports = (payoutsData || []).reduce(
-      (sum, p) => sum + (p.amount_lamports || 0),
+    const totalPaidLamports = (paidSubmissions || []).reduce(
+      (sum, s) => sum + ((s.final_score || 0) * 1000000),
       0
     );
     const totalPaidSol = totalPaidLamports / 1e9;
@@ -61,6 +62,7 @@ export async function GET() {
       .from('submissions')
       .select('user_id, final_score')
       .eq('status', 'approved')
+      .is('paid_at', null)
       .gt('final_score', 0);
 
     const poolTotalScore = (poolSubmissions || []).reduce(
@@ -69,23 +71,41 @@ export async function GET() {
     );
     const poolParticipants = new Set((poolSubmissions || []).map(s => s.user_id)).size;
 
-    // Get recent payouts for activity feed (last 10 completed)
-    const { data: recentPayouts } = await supabase
-      .from('payouts')
+    // Get recent payouts for activity feed (last 10 paid submissions grouped by tx)
+    const { data: recentPaid } = await supabase
+      .from('submissions')
       .select(`
-        amount_lamports,
-        completed_at,
-        user:users!inner(x_username)
+        final_score,
+        paid_at,
+        tx_signature,
+        users!inner(x_username)
       `)
-      .eq('status', 'completed')
-      .order('completed_at', { ascending: false })
-      .limit(10);
+      .eq('status', 'approved')
+      .not('paid_at', 'is', null)
+      .not('tx_signature', 'is', null)
+      .order('paid_at', { ascending: false })
+      .limit(20);
 
-    const recentActivity = (recentPayouts || []).map(p => ({
-      username: (p.user as any)?.x_username || 'anonymous',
-      amount: (p.amount_lamports || 0) / 1e9,
-      time: p.completed_at,
-    }));
+    // Group by transaction signature to show one entry per payout
+    const txMap = new Map();
+    for (const item of (recentPaid || [])) {
+      const txSig = item.tx_signature;
+      if (!txSig) continue;
+
+      if (!txMap.has(txSig)) {
+        txMap.set(txSig, {
+          username: (item.users as any)?.x_username || 'anonymous',
+          amount: 0,
+          time: item.paid_at,
+          txSignature: txSig
+        });
+      }
+
+      const tx = txMap.get(txSig);
+      tx.amount += ((item.final_score || 0) * 1000000) / 1e9;
+    }
+
+    const recentActivity = Array.from(txMap.values()).slice(0, 10);
 
     // Calculate next payout time based on interval
     const intervalHours = config.payout_interval_hours || 24;
