@@ -343,6 +343,7 @@ export default function AdminPage() {
 
   // Login form
   if (!isAuthenticated) {
+    console.log('🔍 Showing login form - isAuthenticated:', isAuthenticated, 'loading:', loading);
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md">
@@ -354,7 +355,7 @@ export default function AdminPage() {
             <p className="text-muted-light">Enter your admin password to continue</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={(e) => { console.log('🔗 Login form submitted'); e.preventDefault(); handleLogin(e); }} className="space-y-4">
             <div>
               <label htmlFor="password" className="block text-sm text-muted mb-2">
                 Password
@@ -363,7 +364,7 @@ export default function AdminPage() {
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { console.log('🔗 Password input changed'); setPassword(e.target.value); }}
                 className="input-dark w-full"
                 placeholder="Enter admin password"
                 autoFocus
