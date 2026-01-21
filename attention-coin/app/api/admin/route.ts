@@ -6,6 +6,7 @@ import {
   getExplorerUrl,
   getFundingBalance
 } from '@/lib/solana';
+import { getExplorerUrl as getAdminExplorerUrl } from '@/lib/admin-wallet';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -162,71 +163,18 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Payout amount must be positive' }, { status: 400 });
         }
 
-        // Validate funding balance
-        const balanceValidation = await validateFundingBalance(payoutLamports);
-        if (!balanceValidation.sufficient) {
-          return NextResponse.json({
-            error: 'Insufficient funding balance',
-            details: {
-              balance: balanceValidation.balance,
-              required: balanceValidation.required,
-              shortBy: balanceValidation.required - balanceValidation.balance
-            }
-          }, { status: 400 });
-        }
-
-        try {
-          // Execute SOL transfer
-          const signature = await sendSolTransfer(payoutAddress, payoutLamports);
-
-          // Create reward record
-          const { error: rewardError } = await supabase
-            .from('rewards')
-            .insert({
-              user_id: user.id,
-              period_date: new Date().toISOString().split('T')[0], // Today's date
-              total_score: submission.final_score || 0,
-              amount_lamports: payoutLamports,
-              status: 'completed',
-              tx_signature: signature,
-            });
-
-          if (rewardError) {
-            console.error('Failed to create reward record:', rewardError);
-            // Continue anyway - the transfer was successful
+        // Return payout details for client-side execution
+        return NextResponse.json({
+          success: true,
+          clientSideRequired: true,
+          data: {
+            recipient: payoutAddress,
+            amount: payoutLamports / LAMPORTS_PER_SOL,
+            amountLamports: payoutLamports,
+            username: user.x_username,
+            submissionId
           }
-
-          // Update submission status to paid
-          const { error: updateError } = await supabase
-            .from('submissions')
-            .update({ 
-              status: 'paid',
-              approved_at: submission.approved_at || new Date().toISOString()
-            })
-            .eq('id', submissionId);
-
-          if (updateError) {
-            console.error('Failed to update submission status:', updateError);
-          }
-
-          return NextResponse.json({
-            success: true,
-            data: {
-              signature,
-              amount: payoutLamports / LAMPORTS_PER_SOL,
-              recipient: payoutAddress,
-              explorerUrl: getExplorerUrl(signature),
-              username: user.x_username
-            }
-          });
-
-        } catch (transferError: any) {
-          console.error('Transfer failed:', transferError);
-          return NextResponse.json({
-            error: 'Transfer failed',
-            details: transferError.message
-          }, { status: 500 });
-        }
+        });
       }
 
       case 'recordPayout': {
@@ -269,7 +217,29 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Failed to record payout' }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true });
+        // Update submission status to paid
+        const { error: updateError } = await supabase
+          .from('submissions')
+          .update({ 
+            status: 'paid',
+            approved_at: new Date().toISOString()
+          })
+          .eq('id', submissionId);
+
+        if (updateError) {
+          console.error('Failed to update submission status:', updateError);
+          // Don't fail the response since the reward was recorded
+        }
+
+        return NextResponse.json({ 
+          success: true,
+          data: {
+            signature,
+            amount,
+            recipient,
+            explorerUrl: getAdminExplorerUrl(signature)
+          }
+        });
       }
 
       default:

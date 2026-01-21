@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { CheckCircle, AlertCircle, Loader2, Lock } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, Lock, Wallet } from 'lucide-react';
+import { useAdminWallet } from '@/contexts/AdminWalletContext';
+import { useSimpleWallet } from '@/hooks/useSimpleWallet';
+import { 
+  createAndSendSimpleTransfer, 
+  validateSimpleWalletBalance, 
+  getSimpleWalletBalance,
+  getExplorerUrl
+} from '@/lib/simple-wallet';
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
@@ -28,9 +36,14 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [customPayoutAmount, setCustomPayoutAmount] = useState<string>('');
+  const [adminWalletBalance, setAdminWalletBalance] = useState<number>(0);
 
   // Store password in session for subsequent API calls
   const [storedPassword, setStoredPassword] = useState<string | null>(null);
+
+  // Admin wallet context - only works on admin page
+  const { isAdminWallet } = useAdminWallet();
+  const simpleWallet = useSimpleWallet();
 
   const callAdminApi = useCallback(async (action: string, data: Record<string, any> = {}) => {
     if (!storedPassword) {
@@ -91,6 +104,31 @@ export default function AdminPage() {
     }
   }, [isAuthenticated, loadData]);
 
+  // Update admin wallet balance when connected
+  useEffect(() => {
+    if (simpleWallet.connected && simpleWallet.publicKey) {
+      const updateBalance = async () => {
+        try {
+          // Create a simple wallet object for the balance function
+          const walletObj = { publicKey: { toBase58: () => simpleWallet.publicKey } } as any;
+          const balance = await getSimpleWalletBalance();
+          setAdminWalletBalance(balance);
+        } catch (err) {
+          console.error('Failed to get admin wallet balance:', err);
+        }
+      };
+
+      updateBalance();
+      
+      // Set up interval to update balance
+      const interval = setInterval(updateBalance, 10000); // Update every 10 seconds
+      
+      return () => clearInterval(interval);
+    } else {
+      setAdminWalletBalance(0);
+    }
+  }, [simpleWallet.connected, simpleWallet.publicKey]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
@@ -116,6 +154,8 @@ export default function AdminPage() {
       // Password is correct
       setStoredPassword(password);
       setIsAuthenticated(true);
+      // Store admin authentication in sessionStorage for wallet context
+      sessionStorage.setItem('admin_authenticated', 'true');
       setStats(result.data.stats);
       setSubmissions(result.data.submissions);
       setPassword(''); // Clear the password field
@@ -169,23 +209,63 @@ export default function AdminPage() {
       setActionLoading(submissionId);
       setError(null);
 
+      if (!simpleWallet.connected || !simpleWallet.publicKey) {
+        throw new Error('Admin wallet not connected');
+      }
+
+      // First get payout details from API
       const result = await callAdminApi('executePayout', { 
         submissionId,
         payoutAmount: amount 
       });
 
-      if (result.success) {
-        // Show success details
-        const { data } = result;
-        const successMessage = `Paid ${data.amount} SOL to @${data.username}\nTX: ${data.signature.slice(0, 8)}...${data.signature.slice(-8)}`;
-        
-        // Update the data to reflect the payment
-        await loadData();
-        
-        // Open explorer in new tab for verification
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to prepare payout');
+      }
+
+      const { data } = result;
+
+      // Check if client-side signing is required
+      if (result.clientSideRequired) {
+        // Validate admin wallet balance
+        const balanceValidation = await validateSimpleWalletBalance(
+          data.amountLamports
+        );
+
+        if (!balanceValidation.sufficient) {
+          throw new Error(`Insufficient admin wallet balance. Have ${(balanceValidation.balance / 1000000000).toFixed(4)} SOL, need ${(balanceValidation.required / 1000000000).toFixed(4)} SOL`);
+        }
+
+        // Execute client-side transfer - this will trigger Phantom popup
+        const signature = await createAndSendSimpleTransfer(
+          data.recipient,
+          data.amountLamports
+        );
+
+        // Record the completed transaction
+        const recordResult = await callAdminApi('recordPayout', {
+          submissionId,
+          signature,
+          amount: data.amount,
+          recipient: data.recipient,
+          username: data.username
+        });
+
+        if (recordResult.success) {
+          // Update the data to reflect the payment
+          await loadData();
+          
+          // Open explorer in new tab for verification
+          if (recordResult.data.explorerUrl) {
+            window.open(recordResult.data.explorerUrl, '_blank');
+          }
+        }
+      } else {
+        // Fallback to server-side (shouldn't happen with new implementation)
         if (data.explorerUrl) {
           window.open(data.explorerUrl, '_blank');
         }
+        await loadData();
       }
     } catch (err: any) {
       console.error('Error executing payout:', err);
@@ -283,6 +363,7 @@ export default function AdminPage() {
             onClick={() => {
               setIsAuthenticated(false);
               setStoredPassword(null);
+              sessionStorage.removeItem('admin_authenticated');
             }}
             className="text-sm text-muted hover:text-white transition-colors"
           >
@@ -312,10 +393,32 @@ export default function AdminPage() {
             <p className="text-2xl sm:text-3xl font-bold text-yellow-400">{stats.pendingApproval}</p>
           </div>
           <div className="bg-surface/80 border border-border rounded-2xl p-5 sm:p-6 hover:border-border-light transition-all duration-200">
-            <p className="text-muted text-sm mb-1">Funding Balance</p>
-            <p className="text-2xl sm:text-3xl font-bold text-green-400">
-              {(stats.fundingBalance / 1000000000).toFixed(2)} SOL
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-muted text-sm">Admin Wallet</p>
+              {simpleWallet.connected && simpleWallet.publicKey ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  <span className="text-xs text-green-400 font-medium">SECURED</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                  <span className="text-xs text-red-400 font-medium">UNSECURED</span>
+                </div>
+              )}
+            </div>
+            <p className="text-lg font-bold mb-1">
+              {simpleWallet.publicKey 
+                ? `${simpleWallet.publicKey.slice(0, 4)}...${simpleWallet.publicKey.slice(-4)}`
+                : 'Not Connected'
+              }
             </p>
+            <p className="text-xs text-muted">
+              Balance: {(adminWalletBalance / 1000000000).toFixed(4)} SOL
+            </p>
+            {!simpleWallet.connected && (
+              <p className="text-xs text-yellow-400 mt-1">Connect wallet to enable payouts</p>
+            )}
           </div>
         </div>
 
@@ -513,8 +616,55 @@ export default function AdminPage() {
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Approved Payouts</h3>
               <div className="text-sm text-muted">
-                Click "Pay" to send SOL instantly
+                {simpleWallet.connected 
+                  ? "Click 'Pay' to send SOL instantly" 
+                  : "Connect admin wallet to enable payouts"
+                }
               </div>
+            </div>
+
+            {/* Admin Wallet Status */}
+            <div className="mb-6 p-4 bg-surface-light/50 rounded-xl border border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Wallet className="w-5 h-5 text-muted" />
+                  <div>
+                    <p className="text-sm font-medium">Admin Wallet Status</p>
+                    <p className="text-xs text-muted">
+                      {simpleWallet.publicKey 
+                        ? `Connected: ${simpleWallet.publicKey.slice(0, 6)}...${simpleWallet.publicKey.slice(-4)}`
+                        : 'No wallet connected'
+                      }
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {simpleWallet.connected ? (
+                    <>
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span className="text-xs text-green-400 font-medium">CONNECTED</span>
+                      <span className="text-xs text-muted ml-2">
+                        {(adminWalletBalance / 1000000000).toFixed(4)} SOL
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                      <span className="text-xs text-red-400 font-medium">NOT CONNECTED</span>
+                      <button
+                        onClick={simpleWallet.connect}
+                        disabled={simpleWallet.connecting}
+                        className="ml-2 bg-primary text-black px-3 py-1 text-xs rounded-lg font-semibold hover:bg-primary/80 disabled:opacity-50"
+                      >
+                        {simpleWallet.connecting ? 'Connecting...' : 'Connect'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              {!simpleWallet.connected && (
+                <p className="text-xs text-yellow-400 mt-1">Connect wallet to enable payouts</p>
+              )}
             </div>
             
             <div className="space-y-3">
@@ -562,23 +712,32 @@ export default function AdminPage() {
                             />
                           </div>
                           
-                          <div className="flex gap-2 mt-3">
-                            <button
-                              onClick={() => executePayout(submission.id, parseFloat(displayAmount))}
-                              disabled={actionLoading === submission.id || parseFloat(displayAmount) <= 0}
-                              className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
-                            >
-                              {actionLoading === submission.id ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  Paying...
-                                </>
-                              ) : (
-                                <>
-                                  Pay {displayAmount} SOL
-                                </>
-                              )}
-                            </button>
+                           <div className="flex gap-2 mt-3">
+                             <button
+                               onClick={() => executePayout(submission.id, parseFloat(displayAmount))}
+                               disabled={
+                                 actionLoading === submission.id || 
+                                 parseFloat(displayAmount) <= 0 ||
+                                 !simpleWallet.connected
+                               }
+                               className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                             >
+                               {actionLoading === submission.id ? (
+                                 <>
+                                   <Loader2 className="w-4 h-4 animate-spin" />
+                                   Paying...
+                                 </>
+                               ) : !simpleWallet.connected ? (
+                                 <>
+                                   <Wallet className="w-4 h-4" />
+                                   Connect Wallet
+                                 </>
+                               ) : (
+                                 <>
+                                   Pay {displayAmount} SOL
+                                 </>
+                               )}
+                             </button>
                             
                             <button
                               onClick={() => markAsPaid(submission.id)}

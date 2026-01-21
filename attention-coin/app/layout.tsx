@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import { Toaster } from 'sonner';
 import { UserProvider } from '@/components/WalletProvider';
+import { AdminWalletProvider } from '@/contexts/AdminWalletContext';
 import Header from '@/components/Header';
 import './globals.css';
 
@@ -43,32 +44,34 @@ export default function RootLayout({
           aria-hidden="true"
         />
 
-        <UserProvider>
-          <Header />
-          <main className="pt-[72px] relative z-10">
-            {children}
-          </main>
-<a
-  href="https://x.com/i/communities/2013663619725365292"
-  target="_blank"
-  rel="noopener noreferrer"
-  className="fixed bottom-5 right-5 z-50 bg-black text-white px-4 py-2 rounded-lg font-semibold hover:opacity-80"
->
-  Follow us on X
-</a>
-          <Toaster
-            theme="dark"
-            position="bottom-right"
-            toastOptions={{
-              style: {
-                background: '#0c0c10',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                color: '#f4f4f5',
-                fontFamily: 'var(--font-geist-sans), system-ui, sans-serif',
-              },
-            }}
-          />
-        </UserProvider>
+        <AdminWalletProvider>
+          <UserProvider>
+            <Header />
+            <main className="pt-[72px] relative z-10">
+              {children}
+            </main>
+            <a
+              href="https://x.com/i/communities/2013663619725365292"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="fixed bottom-5 right-5 z-50 bg-black text-white px-4 py-2 rounded-lg font-semibold hover:opacity-80"
+            >
+              Follow us on X
+            </a>
+            <Toaster
+              theme="dark"
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: '#0c0c10',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  color: '#f4f4f5',
+                  fontFamily: 'var(--font-geist-sans), system-ui, sans-serif',
+                },
+              }}
+            />
+          </UserProvider>
+        </AdminWalletProvider>
       </body>
     </html>
   );
