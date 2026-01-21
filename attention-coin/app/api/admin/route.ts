@@ -31,6 +31,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Check for empty or undefined ADMIN_WALLET_ALLOWLIST
+    if (ADMIN_WALLET_ALLOWLIST.length === 0) {
+      return NextResponse.json({ error: 'Admin wallet allowlist is empty. Access denied.' }, { status: 403 });
+    }
+
     // Verify admin wallet
     const isAdminWallet = ADMIN_WALLET_ALLOWLIST.includes(publicKey);
     if (!isAdminWallet) {
