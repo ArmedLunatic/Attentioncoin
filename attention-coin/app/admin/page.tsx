@@ -4,6 +4,24 @@ import { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, AlertCircle, Loader2, Wallet } from 'lucide-react';
 import bs58 from 'bs58';
 
+// Get the correct Helius RPC URL based on network
+function getHeliusRpcUrl(): string {
+  const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'devnet';
+  const apiKey = process.env.NEXT_PUBLIC_HELIUS_API_KEY;
+
+  // Use mainnet or devnet based on env
+  const rpcNetwork = network === 'mainnet-beta' ? 'mainnet' : 'devnet';
+
+  if (apiKey) {
+    return `https://${rpcNetwork}.helius-rpc.com/?api-key=${apiKey}`;
+  }
+
+  // Fallback to public RPC if no API key (not recommended for production)
+  return network === 'mainnet-beta'
+    ? 'https://api.mainnet-beta.solana.com'
+    : 'https://api.devnet.solana.com';
+}
+
 // Add global type for Phantom wallet
 declare global {
   interface Window {
@@ -186,7 +204,7 @@ export default function AdminPage() {
   const updateWalletBalance = async (publicKey: string) => {
     try {
       const connection = new (window as any).solanaWeb3.Connection(
-        `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY || '60022fb0-2daf-404f-af6f-b7db9ab0efc5'}`,
+        getHeliusRpcUrl(),
         'confirmed'
       );
       const pubKey = new (window as any).solanaWeb3.PublicKey(publicKey);
@@ -351,7 +369,7 @@ export default function AdminPage() {
 
       // Execute client-side transfer - this will trigger Phantom popup
       const connection = new (window as any).solanaWeb3.Connection(
-        `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY || '60022fb0-2daf-404f-af6f-b7db9ab0efc5'}`,
+        getHeliusRpcUrl(),
         'confirmed'
       );
 
