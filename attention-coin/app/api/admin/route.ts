@@ -454,17 +454,30 @@ export async function POST(req: Request) {
 
         // Update submissions as paid (using paid_at timestamp as indicator)
         if (Array.isArray(submissionIds) && submissionIds.length > 0) {
+          const paidAtTimestamp = new Date().toISOString();
+
+          // First update paid_at (required field that always exists)
           const { error: updateError } = await supabase
             .from('submissions')
             .update({
-              paid_at: new Date().toISOString(),
-              tx_signature: signature
+              paid_at: paidAtTimestamp
             })
             .in('id', submissionIds);
 
           if (updateError) {
             console.error('Error updating submissions as paid:', updateError);
             return NextResponse.json({ error: 'Failed to update submission payment status' }, { status: 500 });
+          }
+
+          // Try to update tx_signature (optional field, may not exist yet)
+          // This will fail silently if the column doesn't exist
+          try {
+            await supabase
+              .from('submissions')
+              .update({ tx_signature: signature })
+              .in('id', submissionIds);
+          } catch (err) {
+            console.warn('tx_signature column may not exist yet. Run add-tx-signature-column.sql migration.');
           }
         }
 
